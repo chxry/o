@@ -6,9 +6,10 @@ use glutin::event_loop::{EventLoop, ControlFlow};
 use log::LevelFilter;
 use anyhow::Result;
 
-const VERTICES: [f32; 15] = [
-  -0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5, 0.0, 1.0, 0.0, 0.0, 0.5, 0.0, 0.0, 1.0,
+const VERTICES: [f32; 16] = [
+  -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, 1.0, 1.0, 0.5, 0.5, 1.0, 0.0, -0.5, 0.5, 0.0, 0.0,
 ];
+const INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
 
 fn main() -> Result<()> {
   env_logger::builder().filter_level(LevelFilter::Info).init();
@@ -22,7 +23,8 @@ fn main() -> Result<()> {
     let gl = grr::Device::new(|s| context.get_proc_address(s), grr::Debug::Disable);
 
     let shader = Shader::new(&gl, "res/shader.vert", "res/shader.frag")?;
-    let mesh = Mesh::new(&gl, &VERTICES)?;
+    let mesh = Mesh::new(&gl, &VERTICES, &INDICES)?;
+    let tex = Texture::new(&gl, "res/floppa.jpg")?;
 
     event_loop.run(move |event, _, control_flow| {
       *control_flow = ControlFlow::Wait;
@@ -61,6 +63,7 @@ fn main() -> Result<()> {
           );
 
           shader.bind(&gl);
+          tex.bind(&gl);
           mesh.draw(&gl);
 
           context.swap_buffers().unwrap();
@@ -104,12 +107,13 @@ impl Shader {
 
 struct Mesh {
   arr: grr::VertexArray,
-  buf: grr::Buffer,
+  vert_buf: grr::Buffer,
+  idx_buf: grr::Buffer,
   len: u32,
 }
 
 impl Mesh {
-  unsafe fn new(gl: &grr::Device, verts: &[f32]) -> Result<Self> {
+  unsafe fn new(gl: &grr::Device, vertices: &[f32], indices: &[u16]) -> Result<Self> {
     Ok(Self {
       arr: gl.create_vertex_array(&[
         grr::VertexAttributeDesc {
@@ -121,12 +125,14 @@ impl Mesh {
         grr::VertexAttributeDesc {
           location: 1,
           binding: 0,
-          format: grr::VertexFormat::Xyz32Float,
+          format: grr::VertexFormat::Xy32Float,
           offset: 8,
         },
       ])?,
-      buf: gl.create_buffer_from_host(grr::as_u8_slice(verts), grr::MemoryFlags::empty())?,
-      len: verts.len() as u32,
+      vert_buf: gl
+        .create_buffer_from_host(grr::as_u8_slice(vertices), grr::MemoryFlags::empty())?,
+      idx_buf: gl.create_buffer_from_host(grr::as_u8_slice(indices), grr::MemoryFlags::empty())?,
+      len: indices.len() as u32,
     })
   }
 
@@ -136,12 +142,65 @@ impl Mesh {
       self.arr,
       0,
       &[grr::VertexBufferView {
-        buffer: self.buf,
+        buffer: self.vert_buf,
         offset: 0,
-        stride: 20,
+        stride: 16,
         input_rate: grr::InputRate::Vertex,
       }],
     );
-    gl.draw(grr::Primitive::Triangles, 0..self.len, 0..1);
+    gl.bind_index_buffer(self.arr, self.idx_buf);
+    gl.draw_indexed(
+      grr::Primitive::Triangles,
+      grr::IndexTy::U16,
+      0..self.len,
+      0..1,
+      0,
+    );
+  }
+}
+
+struct Texture(grr::ImageView);
+
+impl Texture {
+  unsafe fn new(gl: &grr::Device, path: &str) -> Result<Self> {
+    let img = image::open(path)?.to_rgba8();
+    let (tex, view) = gl.create_image_and_view(
+      grr::ImageType::D2 {
+        width: img.width(),
+        height: img.height(),
+        layers: 1,
+        samples: 1,
+      },
+      grr::Format::R8G8B8A8_SRGB,
+      1,
+    )?;
+    gl.copy_host_to_image(
+      &img.as_raw(),
+      tex,
+      grr::HostImageCopy {
+        host_layout: grr::MemoryLayout {
+          base_format: grr::BaseFormat::RGBA,
+          format_layout: grr::FormatLayout::U8,
+          row_length: img.width(),
+          image_height: img.height(),
+          alignment: 4,
+        },
+        image_subresource: grr::SubresourceLayers {
+          level: 0,
+          layers: 0..1,
+        },
+        image_offset: grr::Offset { x: 0, y: 0, z: 0 },
+        image_extent: grr::Extent {
+          width: img.width(),
+          height: img.height(),
+          depth: 1,
+        },
+      },
+    );
+    Ok(Self(view))
+  }
+
+  unsafe fn bind(&self, gl: &grr::Device) {
+    gl.bind_image_views(0, &[self.0]);
   }
 }
