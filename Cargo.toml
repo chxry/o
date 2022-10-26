@@ -9,6 +9,7 @@ glutin = "0.29"
 glam = "0.22"
 image = "0.24"
 bytemuck = { version = "1.4", features = ["derive"] }
+obj-rs = "0.7"
 anyhow = "1.0"
 log = "0.4"
 env_logger = "0.9"

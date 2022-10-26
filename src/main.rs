@@ -1,9 +1,11 @@
-use std::fs;
+use std::fs::{self, File};
+use std::io::BufReader;
 use glutin::ContextBuilder;
 use glutin::window::WindowBuilder;
 use glutin::event::{Event, WindowEvent};
 use glutin::event_loop::{EventLoop, ControlFlow};
 use glam::{Mat4, Vec3};
+use obj::{Obj, TexturedVertex};
 use log::LevelFilter;
 use anyhow::Result;
 
@@ -42,30 +44,17 @@ fn main() -> Result<()> {
       .make_current()
       .unwrap();
     let gl = grr::Device::new(|s| context.get_proc_address(s), grr::Debug::Disable);
+    gl.bind_depth_stencil_state(&grr::DepthStencil {
+      depth_test: true,
+      depth_write: true,
+      depth_compare_op: grr::Compare::LessEqual,
+      stencil_test: false,
+      stencil_front: grr::StencilFace::KEEP,
+      stencil_back: grr::StencilFace::KEEP,
+    });
 
     let shader = Shader::new(&gl, "res/shader.vert", "res/shader.frag")?;
-    let mesh = Mesh::new(
-      &gl,
-      vec![
-        Vertex {
-          pos: [-0.5, -0.5, 0.0],
-          uv: [0.0, 1.0],
-        },
-        Vertex {
-          pos: [0.5, -0.5, 0.0],
-          uv: [1.0, 1.0],
-        },
-        Vertex {
-          pos: [0.5, 0.5, 0.0],
-          uv: [1.0, 0.0],
-        },
-        Vertex {
-          pos: [-0.5, 0.5, 0.0],
-          uv: [0.0, 0.0],
-        },
-      ],
-      vec![0, 1, 2, 2, 3, 0],
-    )?;
+    let mesh = Mesh::load(&gl, "res/suzanne.obj")?;
     let tex = Texture::new(&gl, "res/floppa.jpg")?;
 
     let mut rot = 0.0;
@@ -105,6 +94,7 @@ fn main() -> Result<()> {
             grr::Framebuffer::DEFAULT,
             grr::ClearAttachment::ColorFloat(0, [0.0, 0.0, 0.0, 1.0]),
           );
+          gl.clear_attachment(grr::Framebuffer::DEFAULT, grr::ClearAttachment::Depth(1.0));
 
           let model = Mat4::from_rotation_y(rot);
           let view = Mat4::from_translation(Vec3::new(0.0, 0.0, -3.0));
@@ -177,6 +167,22 @@ impl Mesh {
         .create_buffer_from_host(bytemuck::cast_slice(&indices), grr::MemoryFlags::empty())?,
       len: indices.len() as u32,
     })
+  }
+
+  unsafe fn load(gl: &grr::Device, path: &str) -> Result<Self> {
+    let obj: Obj<TexturedVertex> = obj::load_obj(BufReader::new(File::open(path)?))?;
+    Mesh::new(
+      &gl,
+      obj
+        .vertices
+        .iter()
+        .map(|v| Vertex {
+          pos: v.position,
+          uv: [v.texture[0], v.texture[1]],
+        })
+        .collect(),
+      obj.indices,
+    )
   }
 
   unsafe fn draw(&self, gl: &grr::Device) {
