@@ -3,13 +3,34 @@ use glutin::ContextBuilder;
 use glutin::window::WindowBuilder;
 use glutin::event::{Event, WindowEvent};
 use glutin::event_loop::{EventLoop, ControlFlow};
+use glam::{Mat4, Vec3};
 use log::LevelFilter;
 use anyhow::Result;
 
-const VERTICES: [f32; 16] = [
-  -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, 1.0, 1.0, 0.5, 0.5, 1.0, 0.0, -0.5, 0.5, 0.0, 0.0,
-];
-const INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+  pos: [f32; 3],
+  uv: [f32; 2],
+}
+
+impl Vertex {
+  const STRIDE: u32 = 20;
+  const ATTR: [grr::VertexAttributeDesc; 2] = [
+    grr::VertexAttributeDesc {
+      location: 0,
+      binding: 0,
+      format: grr::VertexFormat::Xyz32Float,
+      offset: 0,
+    },
+    grr::VertexAttributeDesc {
+      location: 1,
+      binding: 0,
+      format: grr::VertexFormat::Xy32Float,
+      offset: 12,
+    },
+  ];
+}
 
 fn main() -> Result<()> {
   env_logger::builder().filter_level(LevelFilter::Info).init();
@@ -23,12 +44,34 @@ fn main() -> Result<()> {
     let gl = grr::Device::new(|s| context.get_proc_address(s), grr::Debug::Disable);
 
     let shader = Shader::new(&gl, "res/shader.vert", "res/shader.frag")?;
-    let mesh = Mesh::new(&gl, &VERTICES, &INDICES)?;
+    let mesh = Mesh::new(
+      &gl,
+      vec![
+        Vertex {
+          pos: [-0.5, -0.5, 0.0],
+          uv: [0.0, 1.0],
+        },
+        Vertex {
+          pos: [0.5, -0.5, 0.0],
+          uv: [1.0, 1.0],
+        },
+        Vertex {
+          pos: [0.5, 0.5, 0.0],
+          uv: [1.0, 0.0],
+        },
+        Vertex {
+          pos: [-0.5, 0.5, 0.0],
+          uv: [0.0, 0.0],
+        },
+      ],
+      vec![0, 1, 2, 2, 3, 0],
+    )?;
     let tex = Texture::new(&gl, "res/floppa.jpg")?;
 
+    let mut rot = 0.0;
     event_loop.run(move |event, _, control_flow| {
-      *control_flow = ControlFlow::Wait;
-
+      context.window().request_redraw();
+      rot += 0.0001;
       match event {
         Event::WindowEvent { event, .. } => match event {
           WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -57,12 +100,20 @@ fn main() -> Result<()> {
           _ => {}
         },
         Event::RedrawRequested(_) => {
+          let size = context.window().inner_size();
           gl.clear_attachment(
             grr::Framebuffer::DEFAULT,
             grr::ClearAttachment::ColorFloat(0, [0.0, 0.0, 0.0, 1.0]),
           );
 
+          let model = Mat4::from_rotation_y(rot);
+          let view = Mat4::from_translation(Vec3::new(0.0, 0.0, -3.0));
+          let projection =
+            Mat4::perspective_rh(0.8, size.width as f32 / size.height as f32, 0.1, 10.0);
           shader.bind(&gl);
+          shader.set_mat4(&gl, 0, model);
+          shader.set_mat4(&gl, 1, view);
+          shader.set_mat4(&gl, 2, projection);
           tex.bind(&gl);
           mesh.draw(&gl);
 
@@ -103,6 +154,10 @@ impl Shader {
   unsafe fn bind(&self, gl: &grr::Device) {
     gl.bind_pipeline(self.0);
   }
+
+  unsafe fn set_mat4(&self, gl: &grr::Device, i: u32, val: Mat4) {
+    gl.bind_uniform_constants(self.0, i, &[grr::Constant::Mat4x4(val.to_cols_array_2d())]);
+  }
 }
 
 struct Mesh {
@@ -113,25 +168,13 @@ struct Mesh {
 }
 
 impl Mesh {
-  unsafe fn new(gl: &grr::Device, vertices: &[f32], indices: &[u16]) -> Result<Self> {
+  unsafe fn new(gl: &grr::Device, vertices: Vec<Vertex>, indices: Vec<u16>) -> Result<Self> {
     Ok(Self {
-      arr: gl.create_vertex_array(&[
-        grr::VertexAttributeDesc {
-          location: 0,
-          binding: 0,
-          format: grr::VertexFormat::Xy32Float,
-          offset: 0,
-        },
-        grr::VertexAttributeDesc {
-          location: 1,
-          binding: 0,
-          format: grr::VertexFormat::Xy32Float,
-          offset: 8,
-        },
-      ])?,
+      arr: gl.create_vertex_array(&Vertex::ATTR)?,
       vert_buf: gl
-        .create_buffer_from_host(grr::as_u8_slice(vertices), grr::MemoryFlags::empty())?,
-      idx_buf: gl.create_buffer_from_host(grr::as_u8_slice(indices), grr::MemoryFlags::empty())?,
+        .create_buffer_from_host(bytemuck::cast_slice(&vertices), grr::MemoryFlags::empty())?,
+      idx_buf: gl
+        .create_buffer_from_host(bytemuck::cast_slice(&indices), grr::MemoryFlags::empty())?,
       len: indices.len() as u32,
     })
   }
@@ -144,7 +187,7 @@ impl Mesh {
       &[grr::VertexBufferView {
         buffer: self.vert_buf,
         offset: 0,
-        stride: 16,
+        stride: Vertex::STRIDE,
         input_rate: grr::InputRate::Vertex,
       }],
     );
