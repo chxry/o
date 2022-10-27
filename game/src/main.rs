@@ -1,7 +1,7 @@
 use engine::Engine;
 use engine::ecs::{Stage, Context};
-use engine::scene::{Transform, Camera, scene_renderer_init};
-use engine::gfx::Mesh;
+use engine::scene::{Transform, Camera, Material, scene_renderer_init};
+use engine::gfx::{Mesh, Texture};
 use engine::log::LevelFilter;
 use engine::math::Vec3;
 use anyhow::Result;
@@ -28,5 +28,9 @@ fn start(ctx: Context) -> Result<()> {
   ctx
     .world
     .insert(&teapot, Mesh::load(ctx.renderer, "res/teapot.obj")?);
+  ctx.world.insert(
+    &teapot,
+    Material::Textured(Texture::new(ctx.renderer, "res/floppa.jpg")?),
+  );
   Ok(())
 }

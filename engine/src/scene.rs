@@ -54,15 +54,20 @@ impl Camera {
   }
 }
 
+pub enum Material {
+  Textured(Texture),
+  Color(Vec3),
+}
+
 struct SceneRenderer {
-  shader: Shader,
-  tex: Texture,
+  texture_shader: Shader,
+  color_shader: Shader,
 }
 
 pub fn scene_renderer_init(ctx: Context) -> Result<()> {
   ctx.world.add_resource(SceneRenderer {
-    shader: Shader::new(ctx.renderer, "res/shader.vert", "res/shader.frag")?,
-    tex: Texture::new(ctx.renderer, "res/floppa.jpg")?,
+    texture_shader: Shader::new(ctx.renderer, "res/base.vert", "res/texture.frag")?,
+    color_shader: Shader::new(ctx.renderer, "res/base.vert", "res/color.frag")?,
   });
   ctx.world.add_system(Stage::Draw, &scene_renderer_draw);
   Ok(())
@@ -74,19 +79,35 @@ fn scene_renderer_draw(ctx: Context) -> Result<()> {
       Some(cam_t) => {
         let size = ctx.renderer.context.window().inner_size();
         let r = ctx.world.get_resource::<SceneRenderer>().unwrap();
-        r.shader.bind(&ctx.renderer);
-        r.tex.bind(&ctx.renderer);
+
         let view = Mat4::look_to_rh(cam_t.position, cam_t.rotation.to_scaled_axis(), Vec3::Y);
         let projection =
           Mat4::perspective_rh(cam.fov, size.width as f32 / size.height as f32, 0.1, 10.0);
-        r.shader.bind(&ctx.renderer);
-        r.shader.set_mat4(&ctx.renderer, 1, view);
-        r.shader.set_mat4(&ctx.renderer, 2, projection);
+
         for (e, mesh) in ctx.world.query::<Mesh>() {
           match ctx.world.get::<Transform>(e) {
-            Some(t) => {
-              r.shader.set_mat4(&ctx.renderer, 0, t.as_mat4());
-              mesh.draw(&ctx.renderer);
+            Some(mesh_t) => {
+              let shader = match ctx
+                .world
+                .get::<Material>(e)
+                .unwrap_or(&Material::Color(Vec3::splat(0.75)))
+              {
+                Material::Textured(tex) => {
+                  r.texture_shader.bind(ctx.renderer);
+                  tex.bind(ctx.renderer);
+                  &r.texture_shader
+                }
+                Material::Color(col) => {
+                  r.color_shader.bind(ctx.renderer);
+                  r.color_shader.set_vec3(ctx.renderer, 3, col);
+                  &r.color_shader
+                }
+              };
+
+              shader.set_mat4(ctx.renderer, 0, &mesh_t.as_mat4());
+              shader.set_mat4(ctx.renderer, 1, &view);
+              shader.set_mat4(ctx.renderer, 2, &projection);
+              mesh.draw(ctx.renderer);
             }
             None => warn!("Mesh on {:?} won't be rendered (Missing Transform).", e),
           }

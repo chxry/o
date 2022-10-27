@@ -4,7 +4,7 @@ use glutin::{ContextBuilder, WindowedContext, PossiblyCurrent};
 use glutin::window::WindowBuilder;
 use glutin::dpi::PhysicalSize;
 use glutin::event_loop::EventLoop;
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 use obj::{Obj, TexturedVertex};
 use anyhow::Result;
 
@@ -105,13 +105,21 @@ impl Shader {
     }
   }
 
-  pub fn set_mat4(&self, renderer: &Renderer, i: u32, val: Mat4) {
+  pub fn set_mat4(&self, renderer: &Renderer, i: u32, val: &Mat4) {
     unsafe {
       renderer.gl.bind_uniform_constants(
         self.0,
         i,
         &[grr::Constant::Mat4x4(val.to_cols_array_2d())],
       );
+    }
+  }
+
+  pub fn set_vec3(&self, renderer: &Renderer, i: u32, val: &Vec3) {
+    unsafe {
+      renderer
+        .gl
+        .bind_uniform_constants(self.0, i, &[grr::Constant::Vec3(val.to_array())]);
     }
   }
 }
