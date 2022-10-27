@@ -17,7 +17,7 @@ impl Renderer {
   pub fn new(event_loop: &EventLoop<()>) -> Result<Self> {
     unsafe {
       let context = ContextBuilder::new()
-        .build_windowed(WindowBuilder::new(), &event_loop)?
+        .build_windowed(WindowBuilder::new(), event_loop)?
         .make_current()
         .unwrap();
       let gl = grr::Device::new(|s| context.get_proc_address(s), grr::Debug::Disable);
@@ -74,19 +74,19 @@ impl Renderer {
 pub struct Shader(grr::Pipeline);
 
 impl Shader {
-  pub fn new(gl: &grr::Device, vert_path: &str, frag_path: &str) -> Result<Self> {
+  pub fn new(renderer: &Renderer, vert_path: &str, frag_path: &str) -> Result<Self> {
     unsafe {
-      let vert = gl.create_shader(
+      let vert = renderer.gl.create_shader(
         grr::ShaderStage::Vertex,
         fs::read_to_string(vert_path)?.as_bytes(),
         grr::ShaderFlags::VERBOSE,
       )?;
-      let frag = gl.create_shader(
+      let frag = renderer.gl.create_shader(
         grr::ShaderStage::Fragment,
         fs::read_to_string(frag_path)?.as_bytes(),
         grr::ShaderFlags::VERBOSE,
       )?;
-      Ok(Self(gl.create_graphics_pipeline(
+      Ok(Self(renderer.gl.create_graphics_pipeline(
         grr::VertexPipelineDesc {
           vertex_shader: vert,
           tessellation_control_shader: None,
@@ -99,15 +99,19 @@ impl Shader {
     }
   }
 
-  pub fn bind(&self, gl: &grr::Device) {
+  pub fn bind(&self, renderer: &Renderer) {
     unsafe {
-      gl.bind_pipeline(self.0);
+      renderer.gl.bind_pipeline(self.0);
     }
   }
 
-  pub fn set_mat4(&self, gl: &grr::Device, i: u32, val: Mat4) {
+  pub fn set_mat4(&self, renderer: &Renderer, i: u32, val: Mat4) {
     unsafe {
-      gl.bind_uniform_constants(self.0, i, &[grr::Constant::Mat4x4(val.to_cols_array_2d())]);
+      renderer.gl.bind_uniform_constants(
+        self.0,
+        i,
+        &[grr::Constant::Mat4x4(val.to_cols_array_2d())],
+      );
     }
   }
 }
@@ -145,23 +149,25 @@ pub struct Mesh {
 }
 
 impl Mesh {
-  pub fn new(gl: &grr::Device, vertices: Vec<Vertex>, indices: Vec<u16>) -> Result<Self> {
+  pub fn new(renderer: &Renderer, vertices: Vec<Vertex>, indices: Vec<u16>) -> Result<Self> {
     unsafe {
       Ok(Self {
-        arr: gl.create_vertex_array(&Vertex::ATTR)?,
-        vert_buf: gl
+        arr: renderer.gl.create_vertex_array(&Vertex::ATTR)?,
+        vert_buf: renderer
+          .gl
           .create_buffer_from_host(bytemuck::cast_slice(&vertices), grr::MemoryFlags::empty())?,
-        idx_buf: gl
+        idx_buf: renderer
+          .gl
           .create_buffer_from_host(bytemuck::cast_slice(&indices), grr::MemoryFlags::empty())?,
         len: indices.len() as u32,
       })
     }
   }
 
-  pub fn load(gl: &grr::Device, path: &str) -> Result<Self> {
+  pub fn load(renderer: &Renderer, path: &str) -> Result<Self> {
     let obj: Obj<TexturedVertex> = obj::load_obj(BufReader::new(File::open(path)?))?;
     Self::new(
-      gl,
+      renderer,
       obj
         .vertices
         .iter()
@@ -174,10 +180,10 @@ impl Mesh {
     )
   }
 
-  pub fn draw(&self, gl: &grr::Device) {
+  pub fn draw(&self, renderer: &Renderer) {
     unsafe {
-      gl.bind_vertex_array(self.arr);
-      gl.bind_vertex_buffers(
+      renderer.gl.bind_vertex_array(self.arr);
+      renderer.gl.bind_vertex_buffers(
         self.arr,
         0,
         &[grr::VertexBufferView {
@@ -187,8 +193,8 @@ impl Mesh {
           input_rate: grr::InputRate::Vertex,
         }],
       );
-      gl.bind_index_buffer(self.arr, self.idx_buf);
-      gl.draw_indexed(
+      renderer.gl.bind_index_buffer(self.arr, self.idx_buf);
+      renderer.gl.draw_indexed(
         grr::Primitive::Triangles,
         grr::IndexTy::U16,
         0..self.len,
@@ -202,10 +208,10 @@ impl Mesh {
 pub struct Texture(grr::ImageView);
 
 impl Texture {
-  pub fn new(gl: &grr::Device, path: &str) -> Result<Self> {
+  pub fn new(renderer: &Renderer, path: &str) -> Result<Self> {
     unsafe {
       let img = image::open(path)?.to_rgba8();
-      let (tex, view) = gl.create_image_and_view(
+      let (tex, view) = renderer.gl.create_image_and_view(
         grr::ImageType::D2 {
           width: img.width(),
           height: img.height(),
@@ -215,7 +221,7 @@ impl Texture {
         grr::Format::R8G8B8A8_SRGB,
         1,
       )?;
-      gl.copy_host_to_image(
+      renderer.gl.copy_host_to_image(
         img.as_raw(),
         tex,
         grr::HostImageCopy {
@@ -242,9 +248,9 @@ impl Texture {
     }
   }
 
-  pub fn bind(&self, gl: &grr::Device) {
+  pub fn bind(&self, renderer: &Renderer) {
     unsafe {
-      gl.bind_image_views(0, &[self.0]);
+      renderer.gl.bind_image_views(0, &[self.0]);
     }
   }
 }

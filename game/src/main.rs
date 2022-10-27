@@ -1,18 +1,19 @@
 use engine::Engine;
-use engine::ecs::{Stage, World};
-use engine::log::{LevelFilter, info};
+use engine::ecs::{Stage, Context, Transform};
+use engine::gfx::Mesh;
+use engine::log::LevelFilter;
 use anyhow::Result;
 
 fn main() -> Result<()> {
   env_logger::builder().filter_level(LevelFilter::Info).init();
-  Engine::new().add_system(Stage::Start, &hello_system).run()
+  Engine::new().add_system(Stage::Start, &start).run()
 }
 
-fn hello_system(world: &mut World) {
-  info!("hello");
-  let test = world.spawn();
-  world.insert(&test, 5);
-  for (e, i) in world.query::<i32>() {
-    info!("{:?} {}", e, i);
-  }
+fn start(ctx: Context) -> Result<()> {
+  let teapot = ctx.world.spawn();
+  ctx.world.insert(&teapot, Transform::new());
+  ctx
+    .world
+    .insert(&teapot, Mesh::load(ctx.renderer, "res/teapot.obj")?);
+  Ok(())
 }
