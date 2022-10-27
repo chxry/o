@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::any::{Any, TypeId};
-use glam::{Vec3, Quat, EulerRot, Mat4};
+use log::error;
 use anyhow::Result;
-use crate::gfx::Renderer;
 use crate::HashMapExt;
+use crate::gfx::Renderer;
 
 pub type System = &'static dyn Fn(Context) -> Result<()>;
 
@@ -23,6 +23,8 @@ pub struct Entity(usize);
 
 pub struct World {
   components: HashMap<TypeId, Vec<(Entity, Box<dyn Any>)>>,
+  resources: HashMap<TypeId, Box<dyn Any>>,
+  systems: HashMap<Stage, Vec<System>>,
   counter: usize,
 }
 
@@ -30,6 +32,8 @@ impl World {
   pub fn new() -> Self {
     Self {
       components: HashMap::new(),
+      resources: HashMap::new(),
+      systems: HashMap::new(),
       counter: 0,
     }
   }
@@ -58,50 +62,38 @@ impl World {
   pub fn get<T: Any>(&self, entity: &Entity) -> Option<&T> {
     match self.components.get(&TypeId::of::<T>()) {
       Some(v) => match v.iter().find(|(e, _)| e == entity) {
-        Some(s) => Some(s.1.downcast_ref().unwrap()),
+        Some(s) => s.1.downcast_ref(),
         None => None,
       },
       None => None,
     }
   }
-}
 
-pub struct Transform {
-  pub position: Vec3,
-  pub rotation: Quat,
-  pub scale: Vec3,
-}
+  pub fn add_resource<T: Any>(&mut self, resource: T) {
+    self.resources.insert(TypeId::of::<T>(), Box::new(resource));
+  }
 
-impl Transform {
-  pub fn new() -> Self {
-    Self {
-      position: Vec3::ZERO,
-      rotation: Quat::IDENTITY,
-      scale: Vec3::ONE,
+  pub fn get_resource<T: Any>(&self) -> Option<&T> {
+    match self.resources.get(&TypeId::of::<T>()) {
+      Some(r) => r.downcast_ref(),
+      None => None,
     }
   }
 
-  pub fn pos(mut self, position: Vec3) -> Self {
-    self.position = position;
-    self
+  pub fn add_system(&mut self, stage: Stage, sys: System) {
+    self.systems.push_or_insert(stage, sys);
   }
 
-  pub fn rot_quat(mut self, rotation: Quat) -> Self {
-    self.rotation = rotation;
-    self
-  }
-
-  pub fn rot_euler(mut self, rotation: Vec3) -> Self {
-    self.rotation = Quat::from_euler(EulerRot::XYZ, rotation.x, rotation.y, rotation.z);
-    self
-  }
-
-  pub fn scale(mut self, scale: Vec3) -> Self {
-    self.scale = scale;
-    self
-  }
-
-  pub fn as_mat4(&self) -> Mat4 {
-    Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.position)
+  pub fn run_system(&mut self, renderer: &Renderer, stage: Stage) {
+    if let Some(vec) = self.systems.get(&stage) {
+      for sys in vec.clone() {
+        if let Err(e) = sys(Context {
+          world: self,
+          renderer,
+        }) {
+          error!("Error in system: {}", e);
+        }
+      }
+    }
   }
 }

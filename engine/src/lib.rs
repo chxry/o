@@ -1,57 +1,39 @@
-pub mod ecs;
 pub mod gfx;
+pub mod ecs;
+pub mod scene;
 
 use std::collections::HashMap;
 use std::hash::Hash;
 use glutin::event_loop::{EventLoop, ControlFlow};
 use glutin::event::{Event, WindowEvent};
-use glam::{Mat4, Vec3};
-use log::{error, warn};
 use anyhow::Result;
-use crate::gfx::{Renderer, Shader, Mesh, Texture};
-use crate::ecs::{System, Stage, World, Context, Transform};
+use crate::gfx::Renderer;
+use crate::ecs::{World, Stage, System};
 
 pub use glam as math;
 pub use log;
 
 pub struct Engine {
   world: World,
-  systems: HashMap<Stage, Vec<System>>,
 }
 
 impl Engine {
   pub fn new() -> Self {
     Self {
       world: World::new(),
-      systems: HashMap::new(),
     }
   }
 
   pub fn add_system(mut self, stage: Stage, sys: System) -> Self {
-    self.systems.push_or_insert(stage, sys);
+    self.world.add_system(stage, sys);
     self
-  }
-
-  fn run_system(&mut self, renderer: &Renderer, stage: Stage) {
-    if let Some(vec) = self.systems.get(&stage) {
-      for sys in vec {
-        if let Err(e) = sys(Context {
-          world: &mut self.world,
-          renderer,
-        }) {
-          error!("Error in system: {}", e);
-        }
-      }
-    }
   }
 
   pub fn run(mut self) -> Result<()> {
     let event_loop = EventLoop::new();
     let renderer = Renderer::new(&event_loop)?;
-    let shader = Shader::new(&renderer, "res/shader.vert", "res/shader.frag")?;
-    let tex = Texture::new(&renderer, "res/floppa.jpg")?;
 
-    self.run_system(&renderer, Stage::Start);
+    self.world.run_system(&renderer, Stage::Start);
     event_loop.run(move |event, _, control_flow| {
       renderer.context.window().request_redraw();
       match event {
@@ -61,27 +43,8 @@ impl Engine {
           _ => {}
         },
         Event::RedrawRequested(_) => {
-          let size = renderer.context.window().inner_size();
           renderer.clear();
-
-          shader.bind(&renderer);
-          tex.bind(&renderer);
-          let view = Mat4::look_to_rh(Vec3::new(0.0, 1.0, -5.0), Vec3::Z, Vec3::Y);
-          let projection =
-            Mat4::perspective_rh_gl(0.8, size.width as f32 / size.height as f32, 0.1, 10.0);
-          shader.bind(&renderer);
-          shader.set_mat4(&renderer, 1, view);
-          shader.set_mat4(&renderer, 2, projection);
-          for (e, mesh) in self.world.query::<Mesh>() {
-            match self.world.get::<Transform>(e) {
-              Some(t) => {
-                shader.set_mat4(&renderer, 0, t.as_mat4());
-                mesh.draw(&renderer);
-              }
-              None => warn!("Mesh on {:?} will not be rendered without a Transform.", e),
-            }
-          }
-          self.run_system(&renderer, Stage::Draw);
+          self.world.run_system(&renderer, Stage::Draw);
           renderer.context.swap_buffers().unwrap();
         }
         _ => {}
