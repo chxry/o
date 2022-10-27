@@ -1,23 +1,21 @@
 use std::fs::{self, File};
 use std::io::BufReader;
 use glutin::{ContextBuilder, WindowedContext, PossiblyCurrent};
-use glutin::event::{Event, WindowEvent};
-use glutin::event_loop::{EventLoop, ControlFlow};
 use glutin::window::WindowBuilder;
+use glutin::dpi::PhysicalSize;
+use glutin::event_loop::EventLoop;
 use glam::Mat4;
 use obj::{Obj, TexturedVertex};
 use anyhow::Result;
 
 pub struct Renderer {
-  event_loop: EventLoop<()>,
-  context: WindowedContext<PossiblyCurrent>,
-  pub gl: grr::Device,
+  pub context: WindowedContext<PossiblyCurrent>,
+  gl: grr::Device,
 }
 
 impl Renderer {
-  pub fn new() -> Result<Self> {
+  pub fn new(event_loop: &EventLoop<()>) -> Result<Self> {
     unsafe {
-      let event_loop = EventLoop::new();
       let context = ContextBuilder::new()
         .build_windowed(WindowBuilder::new(), &event_loop)?
         .make_current()
@@ -31,63 +29,45 @@ impl Renderer {
         stencil_front: grr::StencilFace::KEEP,
         stencil_back: grr::StencilFace::KEEP,
       });
-      Ok(Self {
-        event_loop,
-        context,
-        gl,
-      })
+      Ok(Self { context, gl })
     }
   }
 
-  pub fn run<F: Fn(&WindowedContext<PossiblyCurrent>, &grr::Device) + 'static>(
-    self,
-    draw: F,
-  ) -> Result<()> {
-    self.event_loop.run(move |event, _, control_flow| {
-      self.context.window().request_redraw();
-      match event {
-        Event::WindowEvent { event, .. } => match event {
-          WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-          WindowEvent::Resized(size) => unsafe {
-            self.gl.set_viewport(
-              0,
-              &[grr::Viewport {
-                x: 0.0,
-                y: 0.0,
-                w: size.width as _,
-                h: size.height as _,
-                n: 0.0,
-                f: 1.0,
-              }],
-            );
-            self.gl.set_scissor(
-              0,
-              &[grr::Region {
-                x: 0,
-                y: 0,
-                w: size.width as _,
-                h: size.height as _,
-              }],
-            );
-          },
-          _ => {}
-        },
-        Event::RedrawRequested(_) => {
-          unsafe {
-            self.gl.clear_attachment(
-              grr::Framebuffer::DEFAULT,
-              grr::ClearAttachment::ColorFloat(0, [0.0, 0.0, 0.0, 1.0]),
-            );
-            self
-              .gl
-              .clear_attachment(grr::Framebuffer::DEFAULT, grr::ClearAttachment::Depth(1.0));
-          }
-          draw(&self.context, &self.gl);
-          self.context.swap_buffers().unwrap();
-        }
-        _ => {}
-      }
-    })
+  pub fn resize(&self, size: PhysicalSize<u32>) {
+    unsafe {
+      self.gl.set_viewport(
+        0,
+        &[grr::Viewport {
+          x: 0.0,
+          y: 0.0,
+          w: size.width as _,
+          h: size.height as _,
+          n: 0.0,
+          f: 1.0,
+        }],
+      );
+      self.gl.set_scissor(
+        0,
+        &[grr::Region {
+          x: 0,
+          y: 0,
+          w: size.width as _,
+          h: size.height as _,
+        }],
+      );
+    }
+  }
+
+  pub fn clear(&self) {
+    unsafe {
+      self.gl.clear_attachment(
+        grr::Framebuffer::DEFAULT,
+        grr::ClearAttachment::ColorFloat(0, [0.0, 0.0, 0.0, 1.0]),
+      );
+      self
+        .gl
+        .clear_attachment(grr::Framebuffer::DEFAULT, grr::ClearAttachment::Depth(1.0));
+    }
   }
 }
 
