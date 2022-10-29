@@ -5,10 +5,12 @@ edition = "2021"
 
 [dependencies]
 grr = "0.8"
-glutin = "0.29"
+glutin = "0.26"
 glam = "0.22"
 image = "0.24"
 bytemuck = { version = "1.4", features = ["derive"] }
 obj-rs = "0.7"
+imgui = "0.7"
+imgui-winit-support = "0.7"
 anyhow = "1.0"
 log = "0.4"

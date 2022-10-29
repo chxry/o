@@ -64,16 +64,16 @@ struct SceneRenderer {
   color_shader: Shader,
 }
 
-pub fn scene_renderer_init(ctx: Context) -> Result<()> {
+pub fn scenerenderer(ctx: Context) -> Result<()> {
   ctx.world.add_resource(SceneRenderer {
     texture_shader: Shader::new(ctx.renderer, "res/base.vert", "res/texture.frag")?,
     color_shader: Shader::new(ctx.renderer, "res/base.vert", "res/color.frag")?,
   });
-  ctx.world.add_system(Stage::Draw, &scene_renderer_draw);
+  ctx.world.add_system(Stage::Draw, &scenerenderer_draw);
   Ok(())
 }
 
-fn scene_renderer_draw(ctx: Context) -> Result<()> {
+fn scenerenderer_draw(ctx: Context) -> Result<()> {
   match ctx.world.query::<Camera>().get(0) {
     Some((e, cam)) => match ctx.world.get::<Transform>(e) {
       Some(cam_t) => {

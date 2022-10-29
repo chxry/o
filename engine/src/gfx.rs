@@ -10,7 +10,7 @@ use anyhow::Result;
 
 pub struct Renderer {
   pub context: WindowedContext<PossiblyCurrent>,
-  gl: grr::Device,
+  pub gl: grr::Device,
 }
 
 impl Renderer {
@@ -29,6 +29,39 @@ impl Renderer {
         stencil_front: grr::StencilFace::KEEP,
         stencil_back: grr::StencilFace::KEEP,
       });
+      gl.bind_color_blend_state(&grr::ColorBlend {
+        attachments: vec![grr::ColorBlendAttachment {
+          blend_enable: true,
+          color: grr::BlendChannel {
+            src_factor: grr::BlendFactor::SrcAlpha,
+            dst_factor: grr::BlendFactor::OneMinusSrcAlpha,
+            blend_op: grr::BlendOp::Add,
+          },
+          alpha: grr::BlendChannel {
+            src_factor: grr::BlendFactor::One,
+            dst_factor: grr::BlendFactor::One,
+            blend_op: grr::BlendOp::Add,
+          },
+        }],
+      });
+      gl.bind_samplers(
+        0,
+        &[gl.create_sampler(grr::SamplerDesc {
+          min_filter: grr::Filter::Linear,
+          mag_filter: grr::Filter::Linear,
+          mip_map: None,
+          address: (
+            grr::SamplerAddress::ClampEdge,
+            grr::SamplerAddress::ClampEdge,
+            grr::SamplerAddress::ClampEdge,
+          ),
+          lod_bias: 0.0,
+          lod: 0.0..10.0,
+          compare: None,
+          border_color: [0.0, 0.0, 0.0, 1.0],
+        })?],
+      );
+
       Ok(Self { context, gl })
     }
   }
@@ -150,7 +183,7 @@ impl Vertex {
 }
 
 pub struct Mesh {
-  arr: grr::VertexArray,
+  vert_arr: grr::VertexArray,
   vert_buf: grr::Buffer,
   idx_buf: grr::Buffer,
   len: u32,
@@ -160,7 +193,7 @@ impl Mesh {
   pub fn new(renderer: &Renderer, vertices: Vec<Vertex>, indices: Vec<u16>) -> Result<Self> {
     unsafe {
       Ok(Self {
-        arr: renderer.gl.create_vertex_array(&Vertex::ATTR)?,
+        vert_arr: renderer.gl.create_vertex_array(&Vertex::ATTR)?,
         vert_buf: renderer
           .gl
           .create_buffer_from_host(bytemuck::cast_slice(&vertices), grr::MemoryFlags::empty())?,
@@ -190,9 +223,9 @@ impl Mesh {
 
   pub fn draw(&self, renderer: &Renderer) {
     unsafe {
-      renderer.gl.bind_vertex_array(self.arr);
+      renderer.gl.bind_vertex_array(self.vert_arr);
       renderer.gl.bind_vertex_buffers(
-        self.arr,
+        self.vert_arr,
         0,
         &[grr::VertexBufferView {
           buffer: self.vert_buf,
@@ -201,7 +234,7 @@ impl Mesh {
           input_rate: grr::InputRate::Vertex,
         }],
       );
-      renderer.gl.bind_index_buffer(self.arr, self.idx_buf);
+      renderer.gl.bind_index_buffer(self.vert_arr, self.idx_buf);
       renderer.gl.draw_indexed(
         grr::Primitive::Triangles,
         grr::IndexTy::U16,
@@ -216,13 +249,12 @@ impl Mesh {
 pub struct Texture(grr::ImageView);
 
 impl Texture {
-  pub fn new(renderer: &Renderer, path: &str) -> Result<Self> {
+  pub fn new(renderer: &Renderer, data: &[u8], width: u32, height: u32) -> Result<Self> {
     unsafe {
-      let img = image::open(path)?.to_rgba8();
       let (tex, view) = renderer.gl.create_image_and_view(
         grr::ImageType::D2 {
-          width: img.width(),
-          height: img.height(),
+          width,
+          height,
           layers: 1,
           samples: 1,
         },
@@ -230,14 +262,14 @@ impl Texture {
         1,
       )?;
       renderer.gl.copy_host_to_image(
-        img.as_raw(),
+        data,
         tex,
         grr::HostImageCopy {
           host_layout: grr::MemoryLayout {
             base_format: grr::BaseFormat::RGBA,
             format_layout: grr::FormatLayout::U8,
-            row_length: img.width(),
-            image_height: img.height(),
+            row_length: width,
+            image_height: height,
             alignment: 4,
           },
           image_subresource: grr::SubresourceLayers {
@@ -246,14 +278,19 @@ impl Texture {
           },
           image_offset: grr::Offset { x: 0, y: 0, z: 0 },
           image_extent: grr::Extent {
-            width: img.width(),
-            height: img.height(),
+            width,
+            height,
             depth: 1,
           },
         },
       );
       Ok(Self(view))
     }
+  }
+
+  pub fn load(renderer: &Renderer, path: &str) -> Result<Self> {
+    let img = image::open(path)?.to_rgba8();
+    Self::new(renderer, img.as_raw(), img.width(), img.height())
   }
 
   pub fn bind(&self, renderer: &Renderer) {

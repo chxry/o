@@ -1,7 +1,8 @@
 use engine::Engine;
 use engine::ecs::{Stage, Context};
-use engine::scene::{Transform, Camera, Material, scene_renderer_init};
+use engine::scene::{Transform, Camera, Material, scenerenderer};
 use engine::gfx::{Mesh, Texture};
+use engine::ui::uirenderer;
 use engine::log::LevelFilter;
 use engine::math::Vec3;
 use anyhow::Result;
@@ -9,7 +10,8 @@ use anyhow::Result;
 fn main() -> Result<()> {
   env_logger::builder().filter_level(LevelFilter::Info).init();
   Engine::new()
-    .add_system(Stage::Start, &scene_renderer_init)
+    .add_system(Stage::Start, &scenerenderer)
+    .add_system(Stage::Start, &uirenderer)
     .add_system(Stage::Start, &start)
     .run()
 }
@@ -30,7 +32,7 @@ fn start(ctx: Context) -> Result<()> {
     .insert(&teapot, Mesh::load(ctx.renderer, "res/teapot.obj")?);
   ctx.world.insert(
     &teapot,
-    Material::Textured(Texture::new(ctx.renderer, "res/floppa.jpg")?),
+    Material::Textured(Texture::load(ctx.renderer, "res/floppa.jpg")?),
   );
   Ok(())
 }

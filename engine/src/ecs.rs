@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 use std::any::{Any, TypeId};
+use glutin::event::Event;
 use log::error;
 use anyhow::Result;
 use crate::HashMapExt;
 use crate::gfx::Renderer;
 
 pub type System = &'static dyn Fn(Context) -> Result<()>;
+pub type EventHandler = &'static dyn Fn(Context, &Event<()>) -> Result<()>;
 
 pub struct Context<'a> {
   pub world: &'a mut World,
@@ -16,6 +18,7 @@ pub struct Context<'a> {
 pub enum Stage {
   Start,
   Draw,
+  PostDraw,
 }
 
 #[derive(PartialEq, Debug)]
@@ -25,6 +28,7 @@ pub struct World {
   components: HashMap<TypeId, Vec<(Entity, Box<dyn Any>)>>,
   resources: HashMap<TypeId, Box<dyn Any>>,
   systems: HashMap<Stage, Vec<System>>,
+  event_handlers: Vec<EventHandler>,
   counter: usize,
 }
 
@@ -34,6 +38,7 @@ impl World {
       components: HashMap::new(),
       resources: HashMap::new(),
       systems: HashMap::new(),
+      event_handlers: Vec::new(),
       counter: 0,
     }
   }
@@ -80,6 +85,13 @@ impl World {
     }
   }
 
+  pub fn get_resource_mut<T: Any>(&mut self) -> Option<&mut T> {
+    match self.resources.get_mut(&TypeId::of::<T>()) {
+      Some(r) => r.downcast_mut(),
+      None => None,
+    }
+  }
+
   pub fn add_system(&mut self, stage: Stage, sys: System) {
     self.systems.push_or_insert(stage, sys);
   }
@@ -93,6 +105,24 @@ impl World {
         }) {
           error!("Error in system: {}", e);
         }
+      }
+    }
+  }
+
+  pub fn add_event_handler(&mut self, handler: EventHandler) {
+    self.event_handlers.push(handler);
+  }
+
+  pub fn run_event_handler(&mut self, renderer: &Renderer, event: &Event<()>) {
+    for handler in self.event_handlers.clone() {
+      if let Err(e) = handler(
+        Context {
+          world: self,
+          renderer,
+        },
+        event,
+      ) {
+        error!("Error in event handler: {}", e);
       }
     }
   }
