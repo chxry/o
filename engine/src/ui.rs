@@ -2,9 +2,27 @@ use std::fs;
 use std::time::Instant;
 use glutin::event::Event;
 use glam::Mat4;
+use log::warn;
 use anyhow::Result;
 use crate::gfx::{Shader, Texture};
 use crate::ecs::{Context, Stage};
+use crate::take;
+
+pub fn ui_frame<F: Fn(&imgui::Ui)>(ctx: Context, f: F) -> Result<()> {
+  match ctx.world.get_resource::<UiRenderer>() {
+    Some(r) => {
+      r.platform
+        .prepare_frame(r.imgui.io_mut(), ctx.renderer.context.window())?;
+      let ui = r.imgui.frame();
+      f(&ui);
+      r.platform
+        .prepare_render(&ui, ctx.renderer.context.window());
+      ctx.world.add_resource(take(ui.render()));
+    }
+    None => warn!("Missing UiRenderer."),
+  }
+  Ok(())
+}
 
 struct UiRenderer {
   imgui: imgui::Context,
@@ -74,7 +92,6 @@ pub fn uirenderer(ctx: Context) -> Result<()> {
   });
   ctx.world.add_event_handler(&uirenderer_event);
   ctx.world.add_system(Stage::PostDraw, &uirenderer_draw);
-  ctx.world.add_system(Stage::Draw, &test_sys);
   Ok(())
 }
 
@@ -82,20 +99,6 @@ fn uirenderer_event(ctx: Context, event: &Event<()>) -> Result<()> {
   let r = ctx.world.get_resource::<UiRenderer>().unwrap();
   r.platform
     .handle_event(r.imgui.io_mut(), ctx.renderer.context.window(), event);
-  Ok(())
-}
-
-fn test_sys(ctx: Context) -> Result<()> {
-  let r = ctx.world.get_resource::<UiRenderer>().unwrap();
-
-  r.platform
-    .prepare_frame(r.imgui.io_mut(), ctx.renderer.context.window())?;
-  let ui = r.imgui.frame();
-  ui.show_demo_window(&mut true);
-
-  r.platform
-    .prepare_render(&ui, ctx.renderer.context.window());
-  ctx.world.add_resource(take(ui.render()));
   Ok(())
 }
 
@@ -171,8 +174,4 @@ fn uirenderer_draw(ctx: Context) -> Result<()> {
     }
   }
   Ok(())
-}
-
-fn take<T>(t: &T) -> T {
-  unsafe { (t as *const T).read() }
 }

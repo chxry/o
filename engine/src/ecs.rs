@@ -3,8 +3,8 @@ use std::any::{Any, TypeId};
 use glutin::event::Event;
 use log::error;
 use anyhow::Result;
-use crate::HashMapExt;
 use crate::gfx::Renderer;
+use crate::{HashMapExt, mutate};
 
 pub type System = &'static dyn Fn(Context) -> Result<()>;
 pub type EventHandler = &'static dyn Fn(Context, &Event<()>) -> Result<()>;
@@ -119,8 +119,4 @@ impl World {
       }
     }
   }
-}
-
-fn mutate<T>(t: &T) -> &mut T {
-  unsafe { &mut *(t as *const T as *mut T) }
 }

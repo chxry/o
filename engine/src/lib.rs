@@ -82,3 +82,11 @@ impl<K: Hash + Eq, V> HashMapExt<K, V> for HashMap<K, Vec<V>> {
     };
   }
 }
+
+fn mutate<T>(t: &T) -> &mut T {
+  unsafe { &mut *(t as *const T as *mut T) }
+}
+
+fn take<T>(t: &T) -> T {
+  unsafe { (t as *const T).read() }
+}

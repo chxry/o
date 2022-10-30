@@ -2,7 +2,7 @@ use engine::Engine;
 use engine::ecs::{Stage, Context};
 use engine::scene::{Transform, Camera, Material, scenerenderer};
 use engine::gfx::{Mesh, Texture};
-use engine::ui::uirenderer;
+use engine::ui::{uirenderer, ui_frame};
 use engine::log::LevelFilter;
 use engine::math::Vec3;
 use anyhow::Result;
@@ -13,6 +13,7 @@ fn main() -> Result<()> {
     .add_system(Stage::Start, &scenerenderer)
     .add_system(Stage::Start, &uirenderer)
     .add_system(Stage::Start, &start)
+    .add_system(Stage::Draw, &draw)
     .run()
 }
 
@@ -34,5 +35,12 @@ fn start(ctx: Context) -> Result<()> {
     &teapot,
     Material::Textured(Texture::load(ctx.renderer, "res/floppa.jpg")?),
   );
+  Ok(())
+}
+
+fn draw(ctx: Context) -> Result<()> {
+  ui_frame(ctx, |ui| {
+    ui.show_demo_window(&mut true);
+  })?;
   Ok(())
 }
