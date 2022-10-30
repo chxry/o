@@ -78,16 +78,9 @@ impl World {
     self.resources.insert(TypeId::of::<T>(), Box::new(resource));
   }
 
-  pub fn get_resource<T: Any>(&self) -> Option<&T> {
+  pub fn get_resource<T: Any>(&self) -> Option<&mut T> {
     match self.resources.get(&TypeId::of::<T>()) {
-      Some(r) => r.downcast_ref(),
-      None => None,
-    }
-  }
-
-  pub fn get_resource_mut<T: Any>(&mut self) -> Option<&mut T> {
-    match self.resources.get_mut(&TypeId::of::<T>()) {
-      Some(r) => r.downcast_mut(),
+      Some(r) => Some(mutate(r.downcast_ref().unwrap())),
       None => None,
     }
   }
@@ -126,4 +119,8 @@ impl World {
       }
     }
   }
+}
+
+fn mutate<T>(t: &T) -> &mut T {
+  unsafe { &mut *(t as *const T as *mut T) }
 }

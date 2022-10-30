@@ -74,90 +74,105 @@ pub fn uirenderer(ctx: Context) -> Result<()> {
   });
   ctx.world.add_event_handler(&uirenderer_event);
   ctx.world.add_system(Stage::PostDraw, &uirenderer_draw);
+  ctx.world.add_system(Stage::Draw, &test_sys);
   Ok(())
 }
 
 fn uirenderer_event(ctx: Context, event: &Event<()>) -> Result<()> {
-  let r = ctx.world.get_resource_mut::<UiRenderer>().unwrap();
+  let r = ctx.world.get_resource::<UiRenderer>().unwrap();
   r.platform
     .handle_event(r.imgui.io_mut(), ctx.renderer.context.window(), event);
   Ok(())
 }
 
-fn uirenderer_draw(ctx: Context) -> Result<()> {
-  let r = ctx.world.get_resource_mut::<UiRenderer>().unwrap();
-  let io = r.imgui.io_mut();
-  let [width, height] = io.display_size;
-  let now = Instant::now();
-  io.update_delta_time(now - r.last_frame);
-  r.last_frame = now;
+fn test_sys(ctx: Context) -> Result<()> {
+  let r = ctx.world.get_resource::<UiRenderer>().unwrap();
 
   r.platform
-    .prepare_frame(io, ctx.renderer.context.window())?;
+    .prepare_frame(r.imgui.io_mut(), ctx.renderer.context.window())?;
   let ui = r.imgui.frame();
   ui.show_demo_window(&mut true);
 
-  let draw_data = ui.render();
-  for draw_list in draw_data.draw_lists() {
-    unsafe {
-      let vert_buf = ctx.renderer.gl.create_buffer_from_host(
-        grr::as_u8_slice(draw_list.vtx_buffer()),
-        grr::MemoryFlags::empty(),
-      )?;
-      let idx_buf = ctx.renderer.gl.create_buffer_from_host(
-        grr::as_u8_slice(draw_list.idx_buffer()),
-        grr::MemoryFlags::empty(),
-      )?;
-      r.shader.bind(ctx.renderer);
-      r.shader.set_mat4(
-        ctx.renderer,
-        0,
-        &Mat4::orthographic_rh(0.0, width, height, 0.0, 0.0, 1.0),
-      );
-      ctx.renderer.gl.bind_vertex_array(r.vert_arr);
-      ctx.renderer.gl.bind_index_buffer(r.vert_arr, idx_buf);
-      ctx.renderer.gl.bind_vertex_buffers(
-        r.vert_arr,
-        0,
-        &[grr::VertexBufferView {
-          buffer: vert_buf,
-          offset: 0,
-          stride: std::mem::size_of::<imgui::DrawVert>() as _,
-          input_rate: grr::InputRate::Vertex,
-        }],
-      );
-      let mut i = 0;
-      for cmd in draw_list.commands() {
-        if let imgui::DrawCmd::Elements { count, cmd_params } = cmd {
-          r.textures
-            .get(cmd_params.texture_id)
-            .unwrap()
-            .bind(ctx.renderer);
+  r.platform
+    .prepare_render(&ui, ctx.renderer.context.window());
+  ctx.world.add_resource(take(ui.render()));
+  Ok(())
+}
 
-          ctx.renderer.gl.set_scissor(
-            0,
-            &[grr::Region {
-              x: cmd_params.clip_rect[0] as _,
-              y: (height - cmd_params.clip_rect[3]) as _,
-              w: (cmd_params.clip_rect[2] - cmd_params.clip_rect[0])
-                .abs()
-                .ceil() as _,
-              h: (cmd_params.clip_rect[3] - cmd_params.clip_rect[1])
-                .abs()
-                .ceil() as _,
-            }],
-          );
-          ctx.renderer.gl.draw_indexed(
-            grr::Primitive::Triangles,
-            grr::IndexTy::U16,
-            i..i + count as u32,
-            0..1,
-            0,
-          );
-          i += count as u32;
+fn uirenderer_draw(ctx: Context) -> Result<()> {
+  if let Some(draw_data) = ctx.world.get_resource::<imgui::DrawData>() {
+    let r = ctx.world.get_resource::<UiRenderer>().unwrap();
+    let io = r.imgui.io_mut();
+    let [width, height] = io.display_size;
+    let now = Instant::now();
+    io.update_delta_time(now - r.last_frame);
+    r.last_frame = now;
+
+    for draw_list in draw_data.draw_lists() {
+      unsafe {
+        let vert_buf = ctx.renderer.gl.create_buffer_from_host(
+          grr::as_u8_slice(draw_list.vtx_buffer()),
+          grr::MemoryFlags::empty(),
+        )?;
+        let idx_buf = ctx.renderer.gl.create_buffer_from_host(
+          grr::as_u8_slice(draw_list.idx_buffer()),
+          grr::MemoryFlags::empty(),
+        )?;
+        r.shader.bind(ctx.renderer);
+        r.shader.set_mat4(
+          ctx.renderer,
+          0,
+          &Mat4::orthographic_rh(0.0, width, height, 0.0, 0.0, 1.0),
+        );
+        ctx.renderer.gl.bind_vertex_array(r.vert_arr);
+        ctx.renderer.gl.bind_index_buffer(r.vert_arr, idx_buf);
+        ctx.renderer.gl.bind_vertex_buffers(
+          r.vert_arr,
+          0,
+          &[grr::VertexBufferView {
+            buffer: vert_buf,
+            offset: 0,
+            stride: std::mem::size_of::<imgui::DrawVert>() as _,
+            input_rate: grr::InputRate::Vertex,
+          }],
+        );
+        let mut i = 0;
+        for cmd in draw_list.commands() {
+          if let imgui::DrawCmd::Elements { count, cmd_params } = cmd {
+            r.textures
+              .get(cmd_params.texture_id)
+              .unwrap()
+              .bind(ctx.renderer);
+
+            ctx.renderer.gl.set_scissor(
+              0,
+              &[grr::Region {
+                x: cmd_params.clip_rect[0] as _,
+                y: (height - cmd_params.clip_rect[3]) as _,
+                w: (cmd_params.clip_rect[2] - cmd_params.clip_rect[0])
+                  .abs()
+                  .ceil() as _,
+                h: (cmd_params.clip_rect[3] - cmd_params.clip_rect[1])
+                  .abs()
+                  .ceil() as _,
+              }],
+            );
+            ctx.renderer.gl.draw_indexed(
+              grr::Primitive::Triangles,
+              grr::IndexTy::U16,
+              i..i + count as u32,
+              0..1,
+              0,
+            );
+            i += count as u32;
+          }
         }
       }
     }
   }
   Ok(())
+}
+
+fn take<T>(t: &T) -> T {
+  unsafe { (t as *const T).read() }
 }
