@@ -2,7 +2,7 @@ use engine::Engine;
 use engine::ecs::{Stage, Context};
 use engine::scene::{Transform, Camera, Material, scenerenderer};
 use engine::gfx::{Mesh, Texture};
-use engine::ui::{uirenderer, ui_frame};
+use engine::ui::{uirenderer, imgui};
 use engine::log::LevelFilter;
 use engine::math::Vec3;
 use anyhow::Result;
@@ -39,8 +39,7 @@ fn start(ctx: Context) -> Result<()> {
 }
 
 fn draw(ctx: Context) -> Result<()> {
-  ui_frame(ctx, |ui| {
-    ui.show_demo_window(&mut true);
-  })?;
+  let ui = ctx.world.get_resource::<imgui::Ui>().unwrap();
+  ui.show_about_window(&mut true);
   Ok(())
 }

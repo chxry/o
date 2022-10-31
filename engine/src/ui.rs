@@ -1,28 +1,12 @@
-use std::fs;
+use std::{fs, mem};
 use std::time::Instant;
 use glutin::event::Event;
 use glam::Mat4;
-use log::warn;
 use anyhow::Result;
 use crate::gfx::{Shader, Texture};
 use crate::ecs::{Context, Stage};
-use crate::take;
 
-pub fn ui_frame<F: Fn(&imgui::Ui)>(ctx: Context, f: F) -> Result<()> {
-  match ctx.world.get_resource::<UiRenderer>() {
-    Some(r) => {
-      r.platform
-        .prepare_frame(r.imgui.io_mut(), ctx.renderer.context.window())?;
-      let ui = r.imgui.frame();
-      f(&ui);
-      r.platform
-        .prepare_render(&ui, ctx.renderer.context.window());
-      ctx.world.add_resource(take(ui.render()));
-    }
-    None => warn!("Missing UiRenderer."),
-  }
-  Ok(())
-}
+pub use imgui;
 
 struct UiRenderer {
   imgui: imgui::Context,
@@ -91,6 +75,7 @@ pub fn uirenderer(ctx: Context) -> Result<()> {
     last_frame: Instant::now(),
   });
   ctx.world.add_event_handler(&uirenderer_event);
+  ctx.world.add_system(Stage::PreDraw, &uirenderer_predraw);
   ctx.world.add_system(Stage::PostDraw, &uirenderer_draw);
   Ok(())
 }
@@ -102,8 +87,18 @@ fn uirenderer_event(ctx: Context, event: &Event<()>) -> Result<()> {
   Ok(())
 }
 
+fn uirenderer_predraw(ctx: Context) -> Result<()> {
+  let r = ctx.world.get_resource::<UiRenderer>().unwrap();
+  r.platform
+    .prepare_frame(r.imgui.io_mut(), ctx.renderer.context.window())?;
+  ctx
+    .world
+    .add_resource::<imgui::Ui>(unsafe { mem::transmute(r.imgui.frame()) });
+  Ok(())
+}
+
 fn uirenderer_draw(ctx: Context) -> Result<()> {
-  if let Some(draw_data) = ctx.world.get_resource::<imgui::DrawData>() {
+  if let Some(ui) = ctx.world.take_resource::<imgui::Ui>() {
     let r = ctx.world.get_resource::<UiRenderer>().unwrap();
     let io = r.imgui.io_mut();
     let [width, height] = io.display_size;
@@ -111,6 +106,9 @@ fn uirenderer_draw(ctx: Context) -> Result<()> {
     io.update_delta_time(now - r.last_frame);
     r.last_frame = now;
 
+    r.platform
+      .prepare_render(&ui, ctx.renderer.context.window());
+    let draw_data = ui.render();
     for draw_list in draw_data.draw_lists() {
       unsafe {
         let vert_buf = ctx.renderer.gl.create_buffer_from_host(

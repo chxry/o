@@ -57,6 +57,8 @@ impl Engine {
         Event::RedrawRequested(_) => {
           renderer.resize(renderer.context.window().inner_size());
           renderer.clear();
+          // automate this
+          self.world.run_system(&renderer, Stage::PreDraw);
           self.world.run_system(&renderer, Stage::Draw);
           self.world.run_system(&renderer, Stage::PostDraw);
 
@@ -85,8 +87,4 @@ impl<K: Hash + Eq, V> HashMapExt<K, V> for HashMap<K, Vec<V>> {
 
 fn mutate<T>(t: &T) -> &mut T {
   unsafe { &mut *(t as *const T as *mut T) }
-}
-
-fn take<T>(t: &T) -> T {
-  unsafe { (t as *const T).read() }
 }

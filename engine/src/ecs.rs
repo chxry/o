@@ -9,14 +9,15 @@ use crate::{HashMapExt, mutate};
 pub type System = &'static dyn Fn(Context) -> Result<()>;
 pub type EventHandler = &'static dyn Fn(Context, &Event<()>) -> Result<()>;
 
-pub struct Context<'a> {
-  pub world: &'a mut World,
-  pub renderer: &'a Renderer,
+pub struct Context<'w> {
+  pub world: &'w mut World,
+  pub renderer: &'w Renderer,
 }
 
 #[derive(Hash, Eq, PartialEq)]
 pub enum Stage {
   Start,
+  PreDraw,
   Draw,
   PostDraw,
 }
@@ -81,6 +82,13 @@ impl World {
   pub fn get_resource<T: Any>(&self) -> Option<&mut T> {
     match self.resources.get(&TypeId::of::<T>()) {
       Some(r) => Some(mutate(r.downcast_ref().unwrap())),
+      None => None,
+    }
+  }
+
+  pub fn take_resource<T: Any>(&mut self) -> Option<T> {
+    match self.resources.remove(&TypeId::of::<T>()) {
+      Some(r) => Some(*r.downcast().unwrap()),
       None => None,
     }
   }
