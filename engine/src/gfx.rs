@@ -1,11 +1,13 @@
 use std::fs::{self, File};
 use std::io::BufReader;
+use std::ffi::CStr;
 use glutin::{ContextBuilder, WindowedContext, PossiblyCurrent};
 use glutin::window::WindowBuilder;
 use glutin::dpi::PhysicalSize;
 use glutin::event_loop::EventLoop;
 use glam::{Mat4, Vec3};
 use obj::{Obj, TexturedVertex};
+use log::info;
 use anyhow::Result;
 
 pub struct Renderer {
@@ -17,6 +19,7 @@ impl Renderer {
   pub fn new(event_loop: &EventLoop<()>) -> Result<Self> {
     unsafe {
       let context = ContextBuilder::new()
+        .with_vsync(true)
         .build_windowed(WindowBuilder::new(), event_loop)?
         .make_current()
         .unwrap();
@@ -60,6 +63,10 @@ impl Renderer {
           compare: None,
           border_color: [0.0, 0.0, 0.0, 1.0],
         })?],
+      );
+      info!(
+        "Created renderer: {}",
+        CStr::from_ptr(gl.context().GetString(0x1F01) as _).to_str()?
       );
 
       Ok(Self { context, gl })

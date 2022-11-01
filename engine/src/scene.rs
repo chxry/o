@@ -1,3 +1,4 @@
+use std::ops::Range;
 use glam::{Vec3, Quat, EulerRot, Mat4};
 use log::warn;
 use anyhow::Result;
@@ -46,11 +47,12 @@ impl Transform {
 
 pub struct Camera {
   pub fov: f32,
+  pub clip: Range<f32>,
 }
 
 impl Camera {
-  pub fn new(fov: f32) -> Self {
-    Self { fov }
+  pub fn new(fov: f32, clip: Range<f32>) -> Self {
+    Self { fov, clip }
   }
 }
 
@@ -81,8 +83,12 @@ fn scenerenderer_draw(ctx: Context) -> Result<()> {
         let r = ctx.world.get_resource::<SceneRenderer>().unwrap();
 
         let view = Mat4::look_to_rh(cam_t.position, cam_t.rotation.to_scaled_axis(), Vec3::Y);
-        let projection =
-          Mat4::perspective_rh(cam.fov, size.width as f32 / size.height as f32, 0.1, 10.0);
+        let projection = Mat4::perspective_rh(
+          cam.fov,
+          size.width as f32 / size.height as f32,
+          cam.clip.start,
+          cam.clip.end,
+        );
 
         for (e, mesh) in ctx.world.query::<Mesh>() {
           match ctx.world.get::<Transform>(e) {
@@ -90,7 +96,7 @@ fn scenerenderer_draw(ctx: Context) -> Result<()> {
               let shader = match ctx
                 .world
                 .get::<Material>(e)
-                .unwrap_or(&Material::Color(Vec3::splat(0.75)))
+                .unwrap_or(&mut Material::Color(Vec3::splat(0.75)))
               {
                 Material::Textured(tex) => {
                   r.texture_shader.bind(ctx.renderer);

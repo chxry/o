@@ -55,20 +55,20 @@ impl World {
       .push_or_insert(TypeId::of::<T>(), (Entity(entity.0), Box::new(component)));
   }
 
-  pub fn query<T: Any>(&self) -> Vec<(&Entity, &T)> {
+  pub fn query<T: Any>(&self) -> Vec<(&Entity, &mut T)> {
     match self.components.get(&TypeId::of::<T>()) {
       Some(v) => v
         .iter()
-        .map(|(e, b)| (e, b.downcast_ref().unwrap()))
+        .map(|(e, b)| (e, mutate(b.downcast_ref().unwrap())))
         .collect(),
       None => vec![],
     }
   }
 
-  pub fn get<T: Any>(&self, entity: &Entity) -> Option<&T> {
+  pub fn get<T: Any>(&self, entity: &Entity) -> Option<&mut T> {
     match self.components.get(&TypeId::of::<T>()) {
       Some(v) => match v.iter().find(|(e, _)| e == entity) {
-        Some(s) => s.1.downcast_ref(),
+        Some(s) => Some(mutate(s.1.downcast_ref().unwrap())),
         None => None,
       },
       None => None,

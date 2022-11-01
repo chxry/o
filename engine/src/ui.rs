@@ -168,6 +168,8 @@ fn uirenderer_draw(ctx: Context) -> Result<()> {
             i += count as u32;
           }
         }
+        ctx.renderer.gl.delete_buffer(vert_buf);
+        ctx.renderer.gl.delete_buffer(idx_buf);
       }
     }
   }
