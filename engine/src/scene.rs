@@ -2,8 +2,8 @@ use std::ops::Range;
 use glam::{Vec3, Quat, EulerRot, Mat4};
 use log::warn;
 use anyhow::Result;
-use crate::gfx::{Shader, Texture, Mesh};
-use crate::ecs::{Context, Stage};
+use crate::gfx::{Renderer, Shader, Texture, Mesh};
+use crate::ecs::{World, Stage};
 
 pub struct Transform {
   pub position: Vec3,
@@ -66,21 +66,23 @@ struct SceneRenderer {
   color_shader: Shader,
 }
 
-pub fn scenerenderer(ctx: Context) -> Result<()> {
-  ctx.world.add_resource(SceneRenderer {
-    texture_shader: Shader::new(ctx.renderer, "res/base.vert", "res/texture.frag")?,
-    color_shader: Shader::new(ctx.renderer, "res/base.vert", "res/color.frag")?,
+pub fn scenerenderer(world: &mut World) -> Result<()> {
+  let renderer = world.get_resource::<Renderer>().unwrap();
+  world.add_resource(SceneRenderer {
+    texture_shader: Shader::new(renderer, "res/base.vert", "res/texture.frag")?,
+    color_shader: Shader::new(renderer, "res/base.vert", "res/color.frag")?,
   });
-  ctx.world.add_system(Stage::Draw, &scenerenderer_draw);
+  world.add_system(Stage::Draw, &scenerenderer_draw);
   Ok(())
 }
 
-fn scenerenderer_draw(ctx: Context) -> Result<()> {
-  match ctx.world.query::<Camera>().get(0) {
-    Some((e, cam)) => match ctx.world.get::<Transform>(e) {
+fn scenerenderer_draw(world: &mut World) -> Result<()> {
+  match world.query::<Camera>().get(0) {
+    Some((e, cam)) => match e.get::<Transform>() {
       Some(cam_t) => {
-        let size = ctx.renderer.context.window().inner_size();
-        let r = ctx.world.get_resource::<SceneRenderer>().unwrap();
+        let renderer = world.get_resource::<Renderer>().unwrap();
+        let size = renderer.context.window().inner_size();
+        let r = world.get_resource::<SceneRenderer>().unwrap();
 
         let view = Mat4::look_to_rh(cam_t.position, cam_t.rotation.to_scaled_axis(), Vec3::Y);
         let projection = Mat4::perspective_rh(
@@ -90,32 +92,34 @@ fn scenerenderer_draw(ctx: Context) -> Result<()> {
           cam.clip.end,
         );
 
-        for (e, mesh) in ctx.world.query::<Mesh>() {
-          match ctx.world.get::<Transform>(e) {
+        for (e, mesh) in world.query::<Mesh>() {
+          match e.get::<Transform>() {
             Some(mesh_t) => {
-              let shader = match ctx
-                .world
-                .get::<Material>(e)
+              let shader = match e
+                .get::<Material>()
                 .unwrap_or(&mut Material::Color(Vec3::splat(0.75)))
               {
                 Material::Textured(tex) => {
-                  r.texture_shader.bind(ctx.renderer);
-                  tex.bind(ctx.renderer);
+                  r.texture_shader.bind(renderer);
+                  tex.bind(renderer);
                   &r.texture_shader
                 }
                 Material::Color(col) => {
-                  r.color_shader.bind(ctx.renderer);
-                  r.color_shader.set_vec3(ctx.renderer, 3, col);
+                  r.color_shader.bind(renderer);
+                  r.color_shader.set_vec3(renderer, 3, col);
                   &r.color_shader
                 }
               };
 
-              shader.set_mat4(ctx.renderer, 0, &mesh_t.as_mat4());
-              shader.set_mat4(ctx.renderer, 1, &view);
-              shader.set_mat4(ctx.renderer, 2, &projection);
-              mesh.draw(ctx.renderer);
+              shader.set_mat4(renderer, 0, &mesh_t.as_mat4());
+              shader.set_mat4(renderer, 1, &view);
+              shader.set_mat4(renderer, 2, &projection);
+              mesh.draw(renderer);
             }
-            None => warn!("Mesh on {:?} won't be rendered (Missing Transform).", e),
+            None => warn!(
+              "Mesh on entity {} won't be rendered (Missing Transform).",
+              e.id
+            ),
           }
         }
       }

@@ -43,12 +43,13 @@ impl Engine {
 
   pub fn run(mut self) -> Result<()> {
     let event_loop = EventLoop::new();
-    let renderer = Renderer::new(&event_loop)?;
+    self.world.add_resource(Renderer::new(&event_loop)?);
 
-    self.world.run_system(&renderer, Stage::Start);
+    self.world.run_system(Stage::Start);
     event_loop.run(move |event, _, control_flow| {
+      let renderer = self.world.get_resource::<Renderer>().unwrap();
       renderer.context.window().request_redraw();
-      self.world.run_event_handler(&renderer, &event);
+      self.world.run_event_handler(&event);
       match event {
         Event::WindowEvent {
           event: WindowEvent::CloseRequested,
@@ -58,9 +59,9 @@ impl Engine {
           renderer.resize(renderer.context.window().inner_size());
           renderer.clear();
           // automate this
-          self.world.run_system(&renderer, Stage::PreDraw);
-          self.world.run_system(&renderer, Stage::Draw);
-          self.world.run_system(&renderer, Stage::PostDraw);
+          self.world.run_system(Stage::PreDraw);
+          self.world.run_system(Stage::Draw);
+          self.world.run_system(Stage::PostDraw);
 
           renderer.context.swap_buffers().unwrap();
         }
@@ -83,8 +84,4 @@ impl<K: Hash + Eq, V> HashMapExt<K, V> for HashMap<K, Vec<V>> {
       }
     };
   }
-}
-
-fn mutate<T>(t: &T) -> &mut T {
-  unsafe { &mut *(t as *const T as *mut T) }
 }
