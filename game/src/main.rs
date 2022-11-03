@@ -1,13 +1,13 @@
-use engine::{Result, Engine};
-use engine::ecs::{World, Stage};
-use engine::scene::{Transform, Camera, Material, scenerenderer};
-use engine::gfx::{Renderer, Mesh, Texture};
-use engine::ui::{
+use phosphor::{Result, Engine};
+use phosphor::ecs::{World, Stage};
+use phosphor::scene::{Transform, Camera, Material, scenerenderer};
+use phosphor::gfx::{Renderer, Mesh, Texture};
+use phosphor::ui::{
   uirenderer,
   imgui::{Ui, Window, Drag},
 };
-use engine::log::LevelFilter;
-use engine::math::Vec3;
+use phosphor::log::LevelFilter;
+use phosphor::math::Vec3;
 
 struct Teapot;
 
@@ -38,7 +38,7 @@ fn start(world: &mut World) -> Result<()> {
     .insert(Mesh::load(renderer, "res/teapot.obj")?)
     .insert(Material::Textured(Texture::load(
       renderer,
-      "res/floppa.jpg",
+      "res/brick.jpg",
     )?));
   Ok(())
 }

@@ -1,0 +1,6 @@
+[book]
+title = "Phosphor Documentation"
+src = "book"
+
+[build]
+build-dir = "target/book"

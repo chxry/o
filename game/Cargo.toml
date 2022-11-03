@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-engine = { path = "../engine" }
+phosphor = { path = "../phosphor" }
 env_logger = "0.9"
