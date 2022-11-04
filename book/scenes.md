@@ -19,6 +19,7 @@ Now we can use a start system to add a `Camera` and `Mesh` to the scene. Both en
 ```rs
 use phosphor::scene::{Camera, Transform, scenerenderer};
 use phosphor::gfx::{Renderer, Mesh};
+use phosphor::math::Vec3;
 
 fn main() -> Result<()> {
   ...
@@ -60,13 +61,13 @@ use phosphor::gfx::{Renderer, Mesh, Texture};
 
 ...
 world
-    .spawn()
-    .insert(Transform::new())
-    .insert(Mesh::load(renderer, "teapot.obj")?)
-    .insert(Material::Textured(Texture::load(
-      renderer,
-      "brick.jpg",
-    )?));
+  .spawn()
+  .insert(Transform::new())
+  .insert(Mesh::load(renderer, "teapot.obj")?)
+  .insert(Material::Textured(Texture::load(
+    renderer,
+    "brick.jpg",
+  )?));
 ...
 ```
 
