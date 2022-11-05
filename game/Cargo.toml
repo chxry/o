@@ -5,4 +5,6 @@ edition = "2021"
 
 [dependencies]
 phosphor = { path = "../phosphor" }
+phosphor_3d = { path = "../phosphor_3d" }
+phosphor_ui = { path = "../phosphor_ui" }
 env_logger = "0.9"

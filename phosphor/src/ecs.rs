@@ -2,8 +2,7 @@ use std::collections::HashMap;
 use std::any::{Any, TypeId};
 use glutin::event::Event;
 use log::error;
-use anyhow::Result;
-use crate::HashMapExt;
+use crate::{Result, HashMapExt};
 
 pub type System = &'static dyn Fn(&mut World) -> Result<()>;
 pub type EventHandler = &'static dyn Fn(&mut World, &Event<()>) -> Result<()>;

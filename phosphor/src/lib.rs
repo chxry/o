@@ -1,19 +1,21 @@
 pub mod gfx;
 pub mod ecs;
-pub mod scene;
-pub mod ui;
 
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::any::Any;
+use std::error::Error;
 use glutin::event_loop::{EventLoop, ControlFlow};
-use glutin::event::{Event, WindowEvent};
+use glutin::event::WindowEvent;
 use crate::gfx::Renderer;
 use crate::ecs::{World, Stage, System, EventHandler};
 
 pub use glam as math;
 pub use log;
-pub use anyhow::Result;
+pub use grr;
+pub use glutin::event::Event;
+
+pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 pub struct Engine {
   world: World,

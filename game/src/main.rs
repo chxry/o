@@ -1,8 +1,8 @@
 use phosphor::{Result, Engine};
 use phosphor::ecs::{World, Stage};
-use phosphor::scene::{Transform, Camera, Material, scenerenderer};
+use phosphor_3d::{Transform, Camera, Material, scenerenderer};
 use phosphor::gfx::{Renderer, Mesh, Texture};
-use phosphor::ui::{
+use phosphor_ui::{
   uirenderer,
   imgui::{Ui, Window, Drag},
 };

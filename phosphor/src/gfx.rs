@@ -8,7 +8,7 @@ use glutin::event_loop::EventLoop;
 use glam::{Mat4, Vec3};
 use obj::{Obj, TexturedVertex};
 use log::info;
-use anyhow::Result;
+use crate::Result;
 
 pub struct Renderer {
   pub context: WindowedContext<PossiblyCurrent>,

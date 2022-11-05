@@ -1,2 +1,2 @@
 [workspace]
-members = ["phosphor", "game"]
+members = ["phosphor", "phosphor_ui", "phosphor_3d", "game"]

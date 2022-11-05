@@ -4,4 +4,5 @@
 
 - [Project Setup](./project.md)
 - [ECS Introduction](./ecs.md)
-- [Scenes](./scenes.md)
+- [3D Scenes](./scenes.md)
+- [UI](./ui.md)

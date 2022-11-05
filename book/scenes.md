@@ -1,9 +1,9 @@
-# Scenes
+# 3D Scenes
 
-Our game is looking quite empty right now, so lets render a basic scene. Phosphor is designed to be modular, so we have to enable the scene renderer first.
+Our game is looking quite empty right now, so lets render a basic scene using the `phosphor_3d` crate. First we have to enable the `scenerenderer` system.
 
 ```rs
-use phosphor::scene::{scenerenderer};
+use phosphor_3d::scenerenderer;
 
 fn main() -> Result<()> {
   ...
@@ -15,9 +15,10 @@ fn main() -> Result<()> {
 
 We won't see a difference since we haven't added any models, but lets download a [model](https://raw.githubusercontent.com/chxry/o/master/res/teapot.obj).
 
-Now we can use a start system to add a `Camera` and `Mesh` to the scene. Both entities will also need a `Transform` to represent their position. We will need to use the `Renderer` resource to create our mesh. 
+Now we can use a start system to add a `Camera` and `Mesh` to the scene. Both entities will also need a `Transform` to represent their position. We will need to use the `Renderer` resource to create our mesh.
+
 ```rs
-use phosphor::scene::{Camera, Transform, scenerenderer};
+use phosphor_3d::{Camera, Transform, scenerenderer};
 use phosphor::gfx::{Renderer, Mesh};
 use phosphor::math::Vec3;
 
@@ -56,7 +57,7 @@ Lets add a texture to our teapot, first download a [texture](https://raw.githubu
 Now we can add a `Material` to our `Mesh`.
 
 ```rs
-use phosphor::scene::{Camera, Transform, Material, scenerenderer};
+use phosphor_3d::{Camera, Transform, Material, scenerenderer};
 use phosphor::gfx::{Renderer, Mesh, Texture};
 
 ...
