@@ -1186,6 +1186,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "phosphor_editor"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "phosphor",
+ "phosphor_3d",
+ "phosphor_ui",
+]
+
+[[package]]
 name = "phosphor_ui"
 version = "0.1.0"
 dependencies = [

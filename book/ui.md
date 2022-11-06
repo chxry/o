@@ -1,6 +1,6 @@
-# UI
+# phosphor_ui Guide
 
-We can use the `phosphor_ui` crate to debug our game using [imgui](https://github.com/ocornut/imgui). First enable the `uirenderer` system;
+The `phosphor_ui` crate allows us to debug our game using [imgui](https://github.com/ocornut/imgui). To use it first enable the `uirenderer` system.
 
 ```rs
 use phosphor_ui::uirenderer;

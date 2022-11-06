@@ -3,6 +3,9 @@
 # User Guide
 
 - [Project Setup](./project.md)
-- [ECS Introduction](./ecs.md)
-- [3D Scenes](./scenes.md)
-- [UI](./ui.md)
+- [ECS Introduction](./ecs.md)I
+
+# Plugins
+
+- [phosphor_3d](./3d.md)
+- [phosphor_ui](./ui.md)
