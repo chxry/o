@@ -58,10 +58,13 @@ impl Engine {
           ..
         } => *control_flow = ControlFlow::Exit,
         Event::RedrawRequested(_) => {
-          renderer.resize(renderer.context.window().inner_size());
-          renderer.clear();
           // automate this
           self.world.run_system(Stage::PreDraw);
+          unsafe {
+            renderer.gl.bind_framebuffer(grr::Framebuffer::DEFAULT);
+          }
+          renderer.resize(renderer.context.window().inner_size().into());
+          renderer.clear(grr::Framebuffer::DEFAULT);
           self.world.run_system(Stage::Draw);
           self.world.run_system(Stage::PostDraw);
 

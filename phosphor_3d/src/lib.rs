@@ -61,6 +61,12 @@ pub enum Material {
   Color(Vec3),
 }
 
+pub struct SceneRendererOptions {
+  pub draw_stage: bool,
+}
+
+pub struct SceneAspect(pub f32);
+
 struct SceneRenderer {
   texture_shader: Shader,
   color_shader: Shader,
@@ -72,25 +78,34 @@ pub fn scenerenderer(world: &mut World) -> Result<()> {
     texture_shader: Shader::new(renderer, "res/base.vert", "res/texture.frag")?,
     color_shader: Shader::new(renderer, "res/base.vert", "res/color.frag")?,
   });
-  world.add_system(Stage::Draw, &scenerenderer_draw);
+  let d = SceneRendererOptions { draw_stage: true };
+  let options = match world.get_resource::<SceneRendererOptions>() {
+    Some(o) => o,
+    None => &d,
+  };
+  if options.draw_stage {
+    world.add_system(Stage::Draw, &scenerenderer_draw);
+  }
   Ok(())
 }
 
-fn scenerenderer_draw(world: &mut World) -> Result<()> {
+/// for advanced users, will automatically be called by scenerenderer
+pub fn scenerenderer_draw(world: &mut World) -> Result<()> {
   match world.query::<Camera>().get(0) {
     Some((e, cam)) => match e.get::<Transform>() {
       Some(cam_t) => {
         let renderer = world.get_resource::<Renderer>().unwrap();
-        let size = renderer.context.window().inner_size();
         let r = world.get_resource::<SceneRenderer>().unwrap();
 
+        let aspect = match world.get_resource::<SceneAspect>() {
+          Some(a) => a.0,
+          None => {
+            let size = renderer.context.window().inner_size();
+            size.width as f32 / size.height as f32
+          }
+        };
         let view = Mat4::look_to_rh(cam_t.position, cam_t.rotation.to_scaled_axis(), Vec3::Y);
-        let projection = Mat4::perspective_rh(
-          cam.fov,
-          size.width as f32 / size.height as f32,
-          cam.clip.start,
-          cam.clip.end,
-        );
+        let projection = Mat4::perspective_rh(cam.fov, aspect, cam.clip.start, cam.clip.end);
 
         for (e, mesh) in world.query::<Mesh>() {
           match e.get::<Transform>() {

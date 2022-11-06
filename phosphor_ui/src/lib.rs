@@ -4,14 +4,16 @@ use phosphor::{Result, Event, grr};
 use phosphor::gfx::{Renderer, Shader, Texture};
 use phosphor::ecs::{World, Stage};
 use phosphor::math::Mat4;
+use phosphor::log::warn;
 
 pub use imgui;
+
+pub type Textures = imgui::Textures<Texture>;
 
 struct UiRenderer {
   imgui: imgui::Context,
   platform: imgui_winit_support::WinitPlatform,
   shader: Shader,
-  textures: imgui::Textures<Texture>,
   vert_arr: grr::VertexArray,
   last_frame: Instant,
 }
@@ -70,10 +72,10 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
     imgui,
     platform,
     shader,
-    textures,
     vert_arr,
     last_frame: Instant::now(),
   });
+  world.add_resource(textures);
   world.add_event_handler(&uirenderer_event);
   world.add_system(Stage::PreDraw, &uirenderer_predraw);
   world.add_system(Stage::PostDraw, &uirenderer_draw);
@@ -100,6 +102,7 @@ fn uirenderer_predraw(world: &mut World) -> Result<()> {
 fn uirenderer_draw(world: &mut World) -> Result<()> {
   if let Some(ui) = world.take_resource::<imgui::Ui>() {
     let renderer = world.get_resource::<Renderer>().unwrap();
+    let textures = world.get_resource::<Textures>().unwrap();
     let r = world.get_resource::<UiRenderer>().unwrap();
     let io = r.imgui.io_mut();
     let [width, height] = io.display_size;
@@ -140,10 +143,10 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
         let mut i = 0;
         for cmd in draw_list.commands() {
           if let imgui::DrawCmd::Elements { count, cmd_params } = cmd {
-            r.textures
-              .get(cmd_params.texture_id)
-              .unwrap()
-              .bind(renderer);
+            match textures.get(cmd_params.texture_id) {
+              Some(tex) => tex.bind(renderer),
+              None => warn!("Texture {} does not exist.", cmd_params.texture_id.id()),
+            };
 
             renderer.gl.set_scissor(
               0,

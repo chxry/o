@@ -3,7 +3,6 @@ use std::io::BufReader;
 use std::ffi::CStr;
 use glutin::{ContextBuilder, WindowedContext, PossiblyCurrent};
 use glutin::window::WindowBuilder;
-use glutin::dpi::PhysicalSize;
 use glutin::event_loop::EventLoop;
 use glam::{Mat4, Vec3};
 use obj::{Obj, TexturedVertex};
@@ -73,15 +72,15 @@ impl Renderer {
     }
   }
 
-  pub fn resize(&self, size: PhysicalSize<u32>) {
+  pub fn resize(&self, size: [f32; 2]) {
     unsafe {
       self.gl.set_viewport(
         0,
         &[grr::Viewport {
           x: 0.0,
           y: 0.0,
-          w: size.width as _,
-          h: size.height as _,
+          w: size[0],
+          h: size[1],
           n: 0.0,
           f: 1.0,
         }],
@@ -91,22 +90,22 @@ impl Renderer {
         &[grr::Region {
           x: 0,
           y: 0,
-          w: size.width as _,
-          h: size.height as _,
+          w: size[0] as _,
+          h: size[1] as _,
         }],
       );
     }
   }
 
-  pub fn clear(&self) {
+  pub fn clear(&self, fb: grr::Framebuffer) {
     unsafe {
       self.gl.clear_attachment(
-        grr::Framebuffer::DEFAULT,
+        fb,
         grr::ClearAttachment::ColorFloat(0, [0.0, 0.0, 0.0, 1.0]),
       );
       self
         .gl
-        .clear_attachment(grr::Framebuffer::DEFAULT, grr::ClearAttachment::Depth(1.0));
+        .clear_attachment(fb, grr::ClearAttachment::Depth(1.0));
     }
   }
 }
@@ -253,24 +252,15 @@ impl Mesh {
   }
 }
 
-pub struct Texture(grr::ImageView);
+pub struct Texture(grr::Image, grr::ImageView);
 
 impl Texture {
   pub fn new(renderer: &Renderer, data: &[u8], width: u32, height: u32) -> Result<Self> {
     unsafe {
-      let (tex, view) = renderer.gl.create_image_and_view(
-        grr::ImageType::D2 {
-          width,
-          height,
-          layers: 1,
-          samples: 1,
-        },
-        grr::Format::R8G8B8A8_SRGB,
-        1,
-      )?;
+      let tex = Self::empty(renderer, width, height)?;
       renderer.gl.copy_host_to_image(
         data,
-        tex,
+        tex.0,
         grr::HostImageCopy {
           host_layout: grr::MemoryLayout {
             base_format: grr::BaseFormat::RGBA,
@@ -291,7 +281,23 @@ impl Texture {
           },
         },
       );
-      Ok(Self(view))
+      Ok(tex)
+    }
+  }
+
+  pub fn empty(renderer: &Renderer, width: u32, height: u32) -> Result<Self> {
+    unsafe {
+      let (tex, view) = renderer.gl.create_image_and_view(
+        grr::ImageType::D2 {
+          width,
+          height,
+          layers: 1,
+          samples: 1,
+        },
+        grr::Format::R8G8B8A8_SRGB,
+        1,
+      )?;
+      Ok(Self(tex, view))
     }
   }
 
@@ -302,7 +308,11 @@ impl Texture {
 
   pub fn bind(&self, renderer: &Renderer) {
     unsafe {
-      renderer.gl.bind_image_views(0, &[self.0]);
+      renderer.gl.bind_image_views(0, &[self.1]);
     }
+  }
+
+  pub fn view(&self) -> grr::ImageView {
+    self.1
   }
 }
