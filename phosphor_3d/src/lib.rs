@@ -65,6 +65,10 @@ pub struct SceneRendererOptions {
   pub draw_stage: bool,
 }
 
+impl SceneRendererOptions {
+  const DEFAULT: Self = Self { draw_stage: true };
+}
+
 pub struct SceneAspect(pub f32);
 
 struct SceneRenderer {
@@ -78,10 +82,9 @@ pub fn scenerenderer(world: &mut World) -> Result<()> {
     texture_shader: Shader::new(renderer, "res/base.vert", "res/texture.frag")?,
     color_shader: Shader::new(renderer, "res/base.vert", "res/color.frag")?,
   });
-  let d = SceneRendererOptions { draw_stage: true };
   let options = match world.get_resource::<SceneRendererOptions>() {
     Some(o) => o,
-    None => &d,
+    None => &SceneRendererOptions::DEFAULT,
   };
   if options.draw_stage {
     world.add_system(Stage::Draw, &scenerenderer_draw);
@@ -100,7 +103,7 @@ pub fn scenerenderer_draw(world: &mut World) -> Result<()> {
         let aspect = match world.get_resource::<SceneAspect>() {
           Some(a) => a.0,
           None => {
-            let size = renderer.context.window().inner_size();
+            let size = renderer.window.inner_size();
             size.width as f32 / size.height as f32
           }
         };

@@ -1,10 +1,10 @@
 use phosphor::{Engine, Result, grr};
-use phosphor::ecs::{Stage, World};
+use phosphor::ecs::{Stage, World, Name};
 use phosphor::log::LevelFilter;
 use phosphor::gfx::{Texture, Renderer, Mesh};
 use phosphor::math::Vec3;
-use phosphor_ui::{uirenderer, Textures};
-use phosphor_ui::imgui::{Ui, Window, MenuItem, Image, TextureId};
+use phosphor_ui::{uirenderer, Textures, UiRendererOptions};
+use phosphor_ui::imgui::{Ui, Image, TextureId};
 use phosphor_3d::{
   scenerenderer, scenerenderer_draw, Camera, Transform, SceneRendererOptions, SceneAspect,
 };
@@ -16,10 +16,19 @@ struct Scene {
   size: [f32; 2],
 }
 
+struct Outline {
+  open: bool,
+}
+
 fn main() -> Result<()> {
   env_logger::builder().filter_level(LevelFilter::Info).init();
   Engine::new()
     .add_resource(SceneRendererOptions { draw_stage: false })
+    .add_resource(UiRendererOptions {
+      docking: true,
+      ini_path: Some("phosphor_editor/ui.ini"),
+    })
+    .add_resource(Outline { open: true })
     .add_system(Stage::Start, &uirenderer)
     .add_system(Stage::Start, &scenerenderer)
     .add_system(Stage::Start, &setup)
@@ -32,7 +41,7 @@ fn main() -> Result<()> {
 fn setup_scene(world: &mut World) -> Result<()> {
   let renderer = world.get_resource::<Renderer>().unwrap();
   world
-    .spawn()
+    .spawn("cam")
     .insert(
       Transform::new()
         .pos(Vec3::new(0.0, 1.0, -10.0))
@@ -40,7 +49,7 @@ fn setup_scene(world: &mut World) -> Result<()> {
     )
     .insert(Camera::new(0.8, 0.1..100.0));
   world
-    .spawn()
+    .spawn("teapot")
     .insert(Transform::new())
     .insert(Mesh::load(renderer, "res/teapot.obj")?);
   Ok(())
@@ -86,24 +95,36 @@ fn draw_scene(world: &mut World) -> Result<()> {
 
 fn draw_ui(world: &mut World) -> Result<()> {
   let scene = world.get_resource::<Scene>().unwrap();
+  let outline = world.get_resource::<Outline>().unwrap();
   let ui = world.get_resource::<Ui>().unwrap();
   ui.main_menu_bar(|| {
     ui.menu("View", || {
-      MenuItem::new("Scene").build_with_ref(&ui, &mut scene.open);
+      ui.menu_item_config("Scene").build_with_ref(&mut scene.open);
+      ui.menu_item_config("Outline")
+        .build_with_ref(&mut outline.open);
     });
   });
   if scene.open {
-    Window::new("Scene")
+    ui.window("Scene")
       .opened(&mut scene.open)
       .scroll_bar(false)
       .scrollable(false)
-      .build(&ui, || {
+      .build(|| {
         Image::new(scene.tex, scene.size)
           .uv0([0.0, 1.0])
           .uv1([1.0, 0.0])
           .build(&ui);
         scene.size = ui.window_size();
       });
+  }
+  if outline.open {
+    ui.window("Outline").opened(&mut outline.open).build(|| {
+      let [w, _] = ui.window_size();
+      for (_, n) in world.query::<Name>() {
+        ui.selectable(n.0);
+      }
+      ui.button_with_size("Add Entity", [w, 0.0]);
+    });
   }
   Ok(())
 }

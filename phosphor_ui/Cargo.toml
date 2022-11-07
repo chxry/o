@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 phosphor = { path = "../phosphor" }
-imgui = "0.8"
-imgui-winit-support = "0.8"
+imgui = { git = "https://github.com/imgui-rs/imgui-rs", features=["docking"] }
+imgui-winit-support = { git = "https://github.com/imgui-rs/imgui-rs" }

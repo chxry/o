@@ -5,15 +5,15 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::any::Any;
 use std::error::Error;
-use glutin::event_loop::{EventLoop, ControlFlow};
-use glutin::event::WindowEvent;
+use winit::event_loop::{EventLoop, ControlFlow};
+use winit::event::WindowEvent;
 use crate::gfx::Renderer;
 use crate::ecs::{World, Stage, System, EventHandler};
 
 pub use glam as math;
 pub use log;
 pub use grr;
-pub use glutin::event::Event;
+pub use winit::event::Event;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -50,7 +50,7 @@ impl Engine {
     self.world.run_system(Stage::Start);
     event_loop.run(move |event, _, control_flow| {
       let renderer = self.world.get_resource::<Renderer>().unwrap();
-      renderer.context.window().request_redraw();
+      renderer.window.request_redraw();
       self.world.run_event_handler(&event);
       match event {
         Event::WindowEvent {
@@ -63,16 +63,16 @@ impl Engine {
           unsafe {
             renderer.gl.bind_framebuffer(grr::Framebuffer::DEFAULT);
           }
-          renderer.resize(renderer.context.window().inner_size().into());
+          renderer.resize(renderer.window.inner_size().into());
           renderer.clear(grr::Framebuffer::DEFAULT);
           self.world.run_system(Stage::Draw);
           self.world.run_system(Stage::PostDraw);
 
-          renderer.context.swap_buffers().unwrap();
+          renderer.context.swap_buffers();
         }
         _ => {}
       }
-    });
+    })
   }
 }
 

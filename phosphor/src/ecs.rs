@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::any::{Any, TypeId};
-use glutin::event::Event;
+use winit::event::Event;
 use log::error;
 use crate::{Result, HashMapExt};
 
@@ -32,7 +32,7 @@ impl World {
     }
   }
 
-  pub fn spawn(&self) -> Entity {
+  pub fn spawn(&self, name: &'static str) -> Entity {
     unsafe {
       static mut COUNTER: usize = 0;
       COUNTER += 1;
@@ -40,6 +40,7 @@ impl World {
         id: COUNTER,
         world: mutate(self),
       }
+      .insert(Name(name))
     }
   }
 
@@ -59,6 +60,14 @@ impl World {
         .collect(),
       None => vec![],
     }
+  }
+
+  pub fn get_name(&self, name: &'static str) -> Option<Entity> {
+    self
+      .query::<Name>()
+      .into_iter()
+      .find(|f| f.1 .0 == name)
+      .map(|m| m.0)
   }
 
   pub fn add_resource<T: Any>(&mut self, resource: T) {
@@ -105,6 +114,8 @@ impl World {
     }
   }
 }
+
+pub struct Name(pub &'static str);
 
 pub struct Entity<'w> {
   pub id: usize,

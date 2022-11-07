@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies]
 grr = "0.8"
-glutin = "0.27"
+winit = "0.27"
+raw-gl-context = "0.1"
 glam = "0.22"
 image = "0.24"
 bytemuck = { version = "1.4", features = ["derive"] }

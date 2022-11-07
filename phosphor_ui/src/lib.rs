@@ -1,14 +1,27 @@
-use std::{fs, mem};
+use std::{fs, path};
 use std::time::Instant;
+use imgui::{StyleColor, ConfigFlags};
 use phosphor::{Result, Event, grr};
 use phosphor::gfx::{Renderer, Shader, Texture};
 use phosphor::ecs::{World, Stage};
 use phosphor::math::Mat4;
-use phosphor::log::warn;
+use phosphor::log::{info, warn};
 
 pub use imgui;
 
 pub type Textures = imgui::Textures<Texture>;
+
+pub struct UiRendererOptions {
+  pub docking: bool,
+  pub ini_path: Option<&'static str>,
+}
+
+impl UiRendererOptions {
+  const DEFAULT: Self = Self {
+    docking: false,
+    ini_path: None,
+  };
+}
 
 struct UiRenderer {
   imgui: imgui::Context,
@@ -21,7 +34,15 @@ struct UiRenderer {
 pub fn uirenderer(world: &mut World) -> Result<()> {
   let renderer = world.get_resource::<Renderer>().unwrap();
   let mut imgui = imgui::Context::create();
-  imgui.set_ini_filename(None);
+  info!("Created imgui {} context.", imgui::dear_imgui_version());
+  let options = match world.get_resource::<UiRendererOptions>() {
+    Some(o) => o,
+    None => &UiRendererOptions::DEFAULT,
+  };
+  if options.docking {
+    imgui.io_mut().config_flags |= ConfigFlags::DOCKING_ENABLE;
+  }
+  imgui.set_ini_filename(options.ini_path.map(|s| path::PathBuf::from(s)));
 
   let mut fonts = imgui.fonts();
   fonts.add_font(&[imgui::FontSource::TtfData {
@@ -38,11 +59,70 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
     font_tex.height,
   )?);
   drop(fonts);
+  let style = imgui.style_mut();
+  style[StyleColor::Text] = [1.00, 1.00, 1.00, 1.00];
+  style[StyleColor::TextDisabled] = [0.50, 0.50, 0.50, 1.00];
+  style[StyleColor::WindowBg] = [0.10, 0.10, 0.10, 1.00];
+  style[StyleColor::ChildBg] = [0.00, 0.00, 0.00, 0.00];
+  style[StyleColor::PopupBg] = [0.19, 0.19, 0.19, 0.92];
+  style[StyleColor::Border] = [0.19, 0.19, 0.19, 0.29];
+  style[StyleColor::BorderShadow] = [0.00, 0.00, 0.00, 0.24];
+  style[StyleColor::FrameBg] = [0.05, 0.05, 0.05, 0.54];
+  style[StyleColor::FrameBgHovered] = [0.19, 0.19, 0.19, 0.54];
+  style[StyleColor::FrameBgActive] = [0.20, 0.22, 0.23, 1.00];
+  style[StyleColor::TitleBg] = [0.00, 0.00, 0.00, 1.00];
+  style[StyleColor::TitleBgActive] = [0.06, 0.06, 0.06, 1.00];
+  style[StyleColor::TitleBgCollapsed] = [0.00, 0.00, 0.00, 1.00];
+  style[StyleColor::MenuBarBg] = [0.14, 0.14, 0.14, 1.00];
+  style[StyleColor::ScrollbarBg] = [0.05, 0.05, 0.05, 0.54];
+  style[StyleColor::ScrollbarGrab] = [0.34, 0.34, 0.34, 0.54];
+  style[StyleColor::ScrollbarGrabHovered] = [0.40, 0.40, 0.40, 0.54];
+  style[StyleColor::ScrollbarGrabActive] = [0.56, 0.56, 0.56, 0.54];
+  style[StyleColor::CheckMark] = [0.33, 0.67, 0.86, 1.00];
+  style[StyleColor::SliderGrab] = [0.34, 0.34, 0.34, 0.54];
+  style[StyleColor::SliderGrabActive] = [0.56, 0.56, 0.56, 0.54];
+  style[StyleColor::Button] = [0.05, 0.05, 0.05, 0.54];
+  style[StyleColor::ButtonHovered] = [0.19, 0.19, 0.19, 0.54];
+  style[StyleColor::ButtonActive] = [0.20, 0.22, 0.23, 1.00];
+  style[StyleColor::Header] = [0.00, 0.00, 0.00, 0.52];
+  style[StyleColor::HeaderHovered] = [0.00, 0.00, 0.00, 0.36];
+  style[StyleColor::HeaderActive] = [0.20, 0.22, 0.23, 0.33];
+  style[StyleColor::Separator] = [0.28, 0.28, 0.28, 0.29];
+  style[StyleColor::SeparatorHovered] = [0.44, 0.44, 0.44, 0.29];
+  style[StyleColor::SeparatorActive] = [0.40, 0.44, 0.47, 1.00];
+  style[StyleColor::ResizeGrip] = [0.28, 0.28, 0.28, 0.29];
+  style[StyleColor::ResizeGripHovered] = [0.44, 0.44, 0.44, 0.29];
+  style[StyleColor::ResizeGripActive] = [0.40, 0.44, 0.47, 1.00];
+  style[StyleColor::Tab] = [0.00, 0.00, 0.00, 0.52];
+  style[StyleColor::TabHovered] = [0.14, 0.14, 0.14, 1.00];
+  style[StyleColor::TabActive] = [0.20, 0.20, 0.20, 0.36];
+  style[StyleColor::TabUnfocused] = [0.00, 0.00, 0.00, 0.52];
+  style[StyleColor::TabUnfocusedActive] = [0.14, 0.14, 0.14, 1.00];
+  style[StyleColor::DockingPreview] = [0.33, 0.67, 0.86, 1.00];
+  style[StyleColor::DockingEmptyBg] = [0.10, 0.10, 0.10, 1.00];
+  style[StyleColor::PlotLines] = [1.00, 0.00, 0.00, 1.00];
+  style[StyleColor::PlotLinesHovered] = [1.00, 0.00, 0.00, 1.00];
+  style[StyleColor::PlotHistogram] = [1.00, 0.00, 0.00, 1.00];
+  style[StyleColor::PlotHistogramHovered] = [1.00, 0.00, 0.00, 1.00];
+  style[StyleColor::TableHeaderBg] = [0.00, 0.00, 0.00, 0.52];
+  style[StyleColor::TableBorderStrong] = [0.00, 0.00, 0.00, 0.52];
+  style[StyleColor::TableBorderLight] = [0.28, 0.28, 0.28, 0.29];
+  style[StyleColor::TableRowBg] = [0.00, 0.00, 0.00, 0.00];
+  style[StyleColor::TableRowBgAlt] = [1.00, 1.00, 1.00, 0.06];
+  style[StyleColor::TextSelectedBg] = [0.20, 0.22, 0.23, 1.00];
+  style[StyleColor::DragDropTarget] = [0.33, 0.67, 0.86, 1.00];
+  style[StyleColor::NavHighlight] = [0.05, 0.05, 0.05, 0.54];
+  style[StyleColor::NavWindowingHighlight] = [0.19, 0.19, 0.19, 0.54];
+  style[StyleColor::NavWindowingDimBg] = [1.00, 0.00, 0.00, 0.20];
+  style[StyleColor::ModalWindowDimBg] = [1.00, 0.00, 0.00, 0.35];
+  style.window_rounding = 4.0;
+  style.popup_rounding = 4.0;
+  style.frame_rounding = 2.0;
 
   let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui);
   platform.attach_window(
     imgui.io_mut(),
-    renderer.context.window(),
+    &renderer.window,
     imgui_winit_support::HiDpiMode::Locked(1.0),
   );
   let shader = Shader::new(renderer, "res/imgui.vert", "res/imgui.frag")?;
@@ -86,7 +166,7 @@ fn uirenderer_event(world: &mut World, event: &Event<()>) -> Result<()> {
   let renderer = world.get_resource::<Renderer>().unwrap();
   let r = world.get_resource::<UiRenderer>().unwrap();
   r.platform
-    .handle_event(r.imgui.io_mut(), renderer.context.window(), event);
+    .handle_event(r.imgui.io_mut(), &renderer.window, event);
   Ok(())
 }
 
@@ -94,8 +174,19 @@ fn uirenderer_predraw(world: &mut World) -> Result<()> {
   let renderer = world.get_resource::<Renderer>().unwrap();
   let r = world.get_resource::<UiRenderer>().unwrap();
   r.platform
-    .prepare_frame(r.imgui.io_mut(), renderer.context.window())?;
-  world.add_resource::<imgui::Ui>(unsafe { mem::transmute(r.imgui.frame()) });
+    .prepare_frame(r.imgui.io_mut(), &renderer.window)?;
+  let ui = r.imgui.frame();
+
+  let options = match world.get_resource::<UiRendererOptions>() {
+    Some(o) => o,
+    None => &UiRendererOptions::DEFAULT,
+  };
+  if options.docking {
+    unsafe {
+      imgui::sys::igDockSpaceOverViewport(imgui::sys::igGetMainViewport(), 0, std::ptr::null());
+    }
+  }
+  world.add_resource::<imgui::Ui>(unsafe { (ui as *const imgui::Ui).read() });
   Ok(())
 }
 
@@ -110,8 +201,8 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
     io.update_delta_time(now - r.last_frame);
     r.last_frame = now;
 
-    r.platform.prepare_render(&ui, renderer.context.window());
-    let draw_data = ui.render();
+    r.platform.prepare_render(&ui, &renderer.window);
+    let draw_data = r.imgui.render();
     for draw_list in draw_data.draw_lists() {
       unsafe {
         let vert_buf = renderer.gl.create_buffer_from_host(

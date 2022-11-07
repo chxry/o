@@ -1,27 +1,43 @@
 use std::fs::{self, File};
 use std::io::BufReader;
 use std::ffi::CStr;
-use glutin::{ContextBuilder, WindowedContext, PossiblyCurrent};
-use glutin::window::WindowBuilder;
-use glutin::event_loop::EventLoop;
+use winit::window::{WindowBuilder, Window};
+use winit::event_loop::EventLoop;
+use raw_gl_context::{GlConfig, GlContext, Profile};
 use glam::{Mat4, Vec3};
 use obj::{Obj, TexturedVertex};
 use log::info;
 use crate::Result;
 
 pub struct Renderer {
-  pub context: WindowedContext<PossiblyCurrent>,
+  pub window: Window,
+  pub context: GlContext,
   pub gl: grr::Device,
 }
 
 impl Renderer {
   pub fn new(event_loop: &EventLoop<()>) -> Result<Self> {
     unsafe {
-      let context = ContextBuilder::new()
-        .with_vsync(true)
-        .build_windowed(WindowBuilder::new(), event_loop)?
-        .make_current()
-        .unwrap();
+      let window = WindowBuilder::new().build(event_loop)?;
+      let context = GlContext::create(
+        &window,
+        GlConfig {
+          version: (4, 5),
+          profile: Profile::Core,
+          red_bits: 8,
+          blue_bits: 8,
+          green_bits: 8,
+          alpha_bits: 0,
+          depth_bits: 0,
+          stencil_bits: 0,
+          samples: None,
+          srgb: true,
+          double_buffer: true,
+          vsync: true,
+        },
+      )
+      .unwrap();
+      context.make_current();
       let gl = grr::Device::new(|s| context.get_proc_address(s), grr::Debug::Disable);
       gl.bind_depth_stencil_state(&grr::DepthStencil {
         depth_test: true,
@@ -68,7 +84,11 @@ impl Renderer {
         CStr::from_ptr(gl.context().GetString(0x1F01) as _).to_str()?
       );
 
-      Ok(Self { context, gl })
+      Ok(Self {
+        window,
+        context,
+        gl,
+      })
     }
   }
 

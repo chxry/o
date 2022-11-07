@@ -55,7 +55,7 @@ Lets add an entity with a `Health(u8)` component. We can create our entity using
 struct Health(u8);
 
 fn hello(world: &mut World) -> Result<()> {
-  world.spawn().insert(Health(100));
+  world.spawn("player").insert(Health(100));
   Ok(())
 }
 ```

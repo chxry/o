@@ -4,12 +4,10 @@ use phosphor_3d::{Transform, Camera, Material, scenerenderer};
 use phosphor::gfx::{Renderer, Mesh, Texture};
 use phosphor_ui::{
   uirenderer,
-  imgui::{Ui, Window, Drag},
+  imgui::{Ui, Drag},
 };
 use phosphor::log::LevelFilter;
 use phosphor::math::Vec3;
-
-struct Teapot;
 
 fn main() -> Result<()> {
   env_logger::builder().filter_level(LevelFilter::Info).init();
@@ -24,7 +22,7 @@ fn main() -> Result<()> {
 fn start(world: &mut World) -> Result<()> {
   let renderer = world.get_resource::<Renderer>().unwrap();
   world
-    .spawn()
+    .spawn("cam")
     .insert(
       Transform::new()
         .pos(Vec3::new(0.0, 1.0, -10.0))
@@ -32,8 +30,7 @@ fn start(world: &mut World) -> Result<()> {
     )
     .insert(Camera::new(0.8, 0.1..100.0));
   world
-    .spawn()
-    .insert(Teapot)
+    .spawn("teapot")
     .insert(Transform::new())
     .insert(Mesh::load(renderer, "res/teapot.obj")?)
     .insert(Material::Textured(Texture::load(
@@ -44,14 +41,12 @@ fn start(world: &mut World) -> Result<()> {
 }
 
 fn draw(world: &mut World) -> Result<()> {
-  let teapot = &world.query::<Teapot>()[0];
+  let teapot = world.get_name("teapot").unwrap();
   let ui = world.get_resource::<Ui>().unwrap();
-  Window::new("debug")
-    .always_auto_resize(true)
-    .build(&ui, || {
-      Drag::new("position")
-        .speed(0.05)
-        .build_array(&ui, teapot.0.get::<Transform>().unwrap().position.as_mut());
-    });
+  ui.window("debug").always_auto_resize(true).build(|| {
+    Drag::new("position")
+      .speed(0.05)
+      .build_array(&ui, teapot.get::<Transform>().unwrap().position.as_mut());
+  });
   Ok(())
 }
