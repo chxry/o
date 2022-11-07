@@ -90,3 +90,8 @@ impl<K: Hash + Eq, V> HashMapExt<K, V> for HashMap<K, Vec<V>> {
     };
   }
 }
+
+// not very safe, use refcell or something
+pub fn mutate<T>(t: &T) -> &mut T {
+  unsafe { &mut *(t as *const T as *mut T) }
+}

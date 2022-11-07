@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::any::{Any, TypeId};
 use winit::event::Event;
 use log::error;
-use crate::{Result, HashMapExt};
+use crate::{Result, HashMapExt, mutate};
 
 pub type System = &'static dyn Fn(&mut World) -> Result<()>;
 pub type EventHandler = &'static dyn Fn(&mut World, &Event<()>) -> Result<()>;
@@ -140,9 +140,4 @@ impl Entity<'_> {
       None => None,
     }
   }
-}
-
-// not very safe, use refcell or something
-fn mutate<T>(t: &T) -> &mut T {
-  unsafe { &mut *(t as *const T as *mut T) }
 }
