@@ -5,6 +5,7 @@ use phosphor::math::Vec3;
 use phosphor_ui::Textures;
 use phosphor_ui::imgui::{Ui, Image, TextureId, WindowFlags};
 use phosphor_3d::{Camera, Transform, SceneRendererOptions};
+use crate::SelectedEntity;
 
 pub struct Panel {
   pub title: &'static str,
@@ -16,7 +17,8 @@ pub struct Panel {
 pub fn setup_panels(world: &mut World) -> Result<()> {
   let scene = scene_init(world)?;
   let outline = outline_init();
-  world.add_resource(vec![scene, outline]);
+  let inspector = inspector_init();
+  world.add_resource(vec![scene, outline, inspector]);
   Ok(())
 }
 
@@ -90,8 +92,44 @@ fn outline_init() -> Panel {
 
 fn outline_render(world: &mut World, ui: &Ui) {
   let [w, _] = ui.window_size();
-  for (_, n) in world.query::<Name>() {
-    ui.selectable(n.0);
+  let selected = world.get_resource::<SelectedEntity>().unwrap();
+  for (e, n) in world.query::<Name>() {
+    if ui
+      .selectable_config(n.0.clone())
+      .selected(e.id == selected.0.unwrap_or_default())
+      .build()
+    {
+      *selected = SelectedEntity(Some(e.id));
+    }
   }
   ui.button_with_size("Add Entity", [w, 0.0]);
+}
+
+fn inspector_init() -> Panel {
+  Panel {
+    title: "Inspector",
+    flags: WindowFlags::empty(),
+    open: true,
+    render: &inspector_render,
+  }
+}
+
+fn inspector_render(world: &mut World, ui: &Ui) {
+  match world.get_resource::<SelectedEntity>().unwrap().0 {
+    Some(e) => {
+      let size = ui.content_region_avail();
+      let (e, n) = world.get_id::<Name>(e).unwrap();
+      let mut buf = n.0.clone();
+      ui.set_next_item_width(size[0]);
+      if ui
+        .input_text("##", &mut buf)
+        .enter_returns_true(true)
+        .build()
+        && !buf.is_empty()
+      {
+        *n = Name(buf);
+      }
+    }
+    None => ui.text("no entity selected."),
+  }
 }

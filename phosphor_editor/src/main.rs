@@ -8,6 +8,8 @@ use phosphor_ui::{uirenderer, UiRendererOptions};
 use phosphor_ui::imgui::Ui;
 use crate::panels::{Panel, setup_panels};
 
+pub struct SelectedEntity(Option<usize>);
+
 fn main() -> Result<()> {
   env_logger::builder().filter_level(LevelFilter::Info).init();
   Engine::new()
@@ -16,6 +18,7 @@ fn main() -> Result<()> {
       ini_path: Some("phosphor_editor/ui.ini"),
     })
     .add_resource(SceneRendererStage(Stage::PreDraw))
+    .add_resource(SelectedEntity(None))
     .add_system(Stage::Start, &uirenderer)
     .add_system(Stage::Start, &scenerenderer)
     .add_system(Stage::Start, &setup_panels)

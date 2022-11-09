@@ -32,7 +32,7 @@ impl World {
     }
   }
 
-  pub fn spawn(&self, name: &'static str) -> Entity {
+  pub fn spawn(&self, name: &str) -> Entity {
     unsafe {
       static mut COUNTER: usize = 0;
       COUNTER += 1;
@@ -40,7 +40,7 @@ impl World {
         id: COUNTER,
         world: mutate(self),
       }
-      .insert(Name(name))
+      .insert(Name(name.to_string()))
     }
   }
 
@@ -59,6 +59,21 @@ impl World {
         })
         .collect(),
       None => vec![],
+    }
+  }
+
+  pub fn get_id<T: Any>(&self, id: usize) -> Option<(Entity, &mut T)> {
+    match self.components.get(&TypeId::of::<T>()) {
+      Some(v) => v.iter().find(|(e, _)| *e == id).map(|s| {
+        (
+          Entity {
+            id: s.0,
+            world: mutate(self),
+          },
+          mutate(s.1.downcast_ref().unwrap()),
+        )
+      }),
+      None => None,
     }
   }
 
@@ -115,7 +130,7 @@ impl World {
   }
 }
 
-pub struct Name(pub &'static str);
+pub struct Name(pub String);
 
 pub struct Entity<'w> {
   pub id: usize,
@@ -132,12 +147,6 @@ impl Entity<'_> {
   }
 
   pub fn get<T: Any>(&self) -> Option<&mut T> {
-    match self.world.components.get(&TypeId::of::<T>()) {
-      Some(v) => match v.iter().find(|(e, _)| *e == self.id) {
-        Some(s) => Some(mutate(s.1.downcast_ref().unwrap())),
-        None => None,
-      },
-      None => None,
-    }
+    self.world.get_id(self.id).map(|c| c.1)
   }
 }
