@@ -1,18 +1,15 @@
-use phosphor::{Result, grr, mutate};
+use phosphor::Result;
 use phosphor::ecs::{World, Name};
-use phosphor::gfx::{Texture, Renderer, Mesh};
+use phosphor::gfx::{Texture, Mesh, gl};
 use phosphor::math::Vec3;
 use phosphor_ui::Textures;
 use phosphor_ui::imgui::{Ui, Image, TextureId};
-use phosphor_3d::{scenerenderer_draw, Camera, Transform, SceneAspect};
+use phosphor_3d::{Camera, Transform, SceneRendererOptions};
 
 pub trait Panel {
   fn setup(_: &mut World) -> Result<Self>
   where
     Self: Sized;
-  fn update(&mut self, _: &mut World) -> Result<()> {
-    Ok(())
-  }
   fn render(&mut self, _: &mut World, _: &Ui) -> Result<()>;
   fn title(&self) -> &'static str;
   fn open(&mut self) -> &mut bool;
@@ -25,23 +22,14 @@ pub fn setup_panels(world: &mut World) -> Result<()> {
   Ok(())
 }
 
-pub fn update_panels(world: &mut World) -> Result<()> {
-  for panel in world.get_resource::<Vec<Box<dyn Panel>>>().unwrap() {
-    panel.update(mutate(world))?;
-  }
-  Ok(())
-}
-
 struct Scene {
   open: bool,
-  fb: grr::Framebuffer,
+  fb: u32,
   tex: TextureId,
-  size: [f32; 2],
 }
 
 impl Panel for Scene {
   fn setup(world: &mut World) -> Result<Self> {
-    let renderer = world.get_resource::<Renderer>().unwrap();
     let textures = world.get_resource::<Textures>().unwrap();
     world
       .spawn("cam")
@@ -54,54 +42,42 @@ impl Panel for Scene {
     world
       .spawn("teapot")
       .insert(Transform::new())
-      .insert(Mesh::load(renderer, "res/teapot.obj")?);
+      .insert(Mesh::load("res/teapot.obj")?);
     unsafe {
-      let fb = renderer.gl.create_framebuffer()?;
-      let tex = Texture::empty(renderer, 1920, 1080)?; // todo resize
-      renderer.gl.bind_attachments(
-        fb,
-        &[(
-          grr::Attachment::Color(0),
-          grr::AttachmentView::Image(tex.view()),
-        )],
+      let mut fb = 0;
+      gl::GenFramebuffers(1, &mut fb);
+      gl::BindFramebuffer(gl::FRAMEBUFFER, fb);
+      let tex = Texture::new(&[], 0, 0)?;
+      gl::FramebufferTexture2D(
+        gl::FRAMEBUFFER,
+        gl::COLOR_ATTACHMENT0,
+        gl::TEXTURE_2D,
+        tex.0,
+        0,
       );
+      let tex = textures.insert(tex);
       Ok(Self {
         open: true,
         fb,
-        tex: textures.insert(tex),
-        size: [1920.0, 1080.0],
+        tex,
       })
     }
   }
 
-  fn update(&mut self, world: &mut World) -> Result<()> {
-    if self.open {
-      let renderer = world.get_resource::<Renderer>().unwrap();
-      unsafe {
-        renderer.gl.bind_framebuffer(self.fb);
-        renderer.resize([1920.0, 1080.0]);
-        renderer.clear(self.fb);
-      }
-      world.add_resource(SceneAspect(self.size[0] / self.size[1]));
-      scenerenderer_draw(world)?;
-    }
-    Ok(())
-  }
+  fn render(&mut self, world: &mut World, ui: &Ui) -> Result<()> {
+    let size = ui.window_size();
+    Image::new(self.tex, size)
+      .uv0([0.0, 1.0])
+      .uv1([1.0, 0.0])
+      .build(&ui);
 
-  fn render(&mut self, _: &mut World, ui: &Ui) -> Result<()> {
-    if self.open {
-      ui.window("Scene")
-        .opened(&mut self.open)
-        .scroll_bar(false)
-        .scrollable(false)
-        .build(|| {
-          Image::new(self.tex, self.size)
-            .uv0([0.0, 1.0])
-            .uv1([1.0, 0.0])
-            .build(&ui);
-          self.size = ui.window_size();
-        });
-    }
+    let tex = world
+      .get_resource::<Textures>()
+      .unwrap()
+      .get(self.tex)
+      .unwrap();
+    tex.resize(size[0] as _, size[1] as _);
+    world.add_resource(SceneRendererOptions { fb: self.fb, size });
     Ok(())
   }
 
@@ -124,15 +100,11 @@ impl Panel for Outline {
   }
 
   fn render(&mut self, world: &mut World, ui: &Ui) -> Result<()> {
-    if self.open {
-      ui.window("Outline").opened(&mut self.open).build(|| {
-        let [w, _] = ui.window_size();
-        for (_, n) in world.query::<Name>() {
-          ui.selectable(n.0);
-        }
-        ui.button_with_size("Add Entity", [w, 0.0]);
-      });
+    let [w, _] = ui.window_size();
+    for (_, n) in world.query::<Name>() {
+      ui.selectable(n.0);
     }
+    ui.button_with_size("Add Entity", [w, 0.0]);
     Ok(())
   }
 

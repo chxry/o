@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-grr = "0.8"
+gl = "0.14"
 winit = "0.27"
 raw-gl-context = "0.1"
 glam = "0.22"

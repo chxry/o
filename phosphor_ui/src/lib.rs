@@ -1,8 +1,8 @@
 use std::{fs, path};
 use std::time::Instant;
 use imgui::{StyleColor, ConfigFlags};
-use phosphor::{Result, Event, grr};
-use phosphor::gfx::{Renderer, Shader, Texture};
+use phosphor::{Result, Event};
+use phosphor::gfx::{Renderer, Shader, Texture, gl};
 use phosphor::ecs::{World, Stage};
 use phosphor::math::Mat4;
 use phosphor::log::{info, warn};
@@ -27,7 +27,9 @@ struct UiRenderer {
   imgui: imgui::Context,
   platform: imgui_winit_support::WinitPlatform,
   shader: Shader,
-  vert_arr: grr::VertexArray,
+  vert_arr: u32,
+  vert_buf: u32,
+  idx_buf: u32,
   last_frame: Instant,
 }
 
@@ -53,7 +55,6 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
   let font_tex = fonts.build_rgba32_texture();
   let mut textures = imgui::Textures::new();
   fonts.tex_id = textures.insert(Texture::new(
-    renderer,
     font_tex.data,
     font_tex.width,
     font_tex.height,
@@ -125,34 +126,31 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
     &renderer.window,
     imgui_winit_support::HiDpiMode::Locked(1.0),
   );
-  let shader = Shader::new(renderer, "res/imgui.vert", "res/imgui.frag")?;
-  let vert_arr = unsafe {
-    renderer.gl.create_vertex_array(&[
-      grr::VertexAttributeDesc {
-        location: 0,
-        binding: 0,
-        format: grr::VertexFormat::Xy32Float,
-        offset: 0,
-      },
-      grr::VertexAttributeDesc {
-        location: 1,
-        binding: 0,
-        format: grr::VertexFormat::Xy32Float,
-        offset: 8,
-      },
-      grr::VertexAttributeDesc {
-        location: 2,
-        binding: 0,
-        format: grr::VertexFormat::Xyzw8Unorm,
-        offset: 16,
-      },
-    ])?
-  };
+  let shader = Shader::new("res/imgui.vert", "res/imgui.frag")?;
+  let mut vert_arr = 0;
+  let mut vert_buf = 0;
+  let mut idx_buf = 0;
+  unsafe {
+    gl::GenVertexArrays(1, &mut vert_arr);
+    gl::BindVertexArray(vert_arr);
+    gl::GenBuffers(1, &mut vert_buf);
+    gl::BindBuffer(gl::ARRAY_BUFFER, vert_buf);
+    gl::GenBuffers(1, &mut idx_buf);
+    gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, idx_buf);
+    gl::EnableVertexAttribArray(0);
+    gl::VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, 20, 0 as _);
+    gl::EnableVertexAttribArray(1);
+    gl::VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, 20, 8 as _);
+    gl::EnableVertexAttribArray(2);
+    gl::VertexAttribPointer(2, 4, gl::UNSIGNED_BYTE, gl::TRUE, 20, 16 as _);
+  }
   world.add_resource(UiRenderer {
     imgui,
     platform,
     shader,
     vert_arr,
+    vert_buf,
+    idx_buf,
     last_frame: Instant::now(),
   });
   world.add_resource(textures);
@@ -193,8 +191,12 @@ fn uirenderer_predraw(world: &mut World) -> Result<()> {
 fn uirenderer_draw(world: &mut World) -> Result<()> {
   if let Some(ui) = world.take_resource::<imgui::Ui>() {
     let renderer = world.get_resource::<Renderer>().unwrap();
+    renderer.depth_test(false);
     let textures = world.get_resource::<Textures>().unwrap();
     let r = world.get_resource::<UiRenderer>().unwrap();
+    unsafe {
+      gl::BindVertexArray(r.vert_arr);
+    }
     let io = r.imgui.io_mut();
     let [width, height] = io.display_size;
     let now = Instant::now();
@@ -205,67 +207,46 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
     let draw_data = r.imgui.render();
     for draw_list in draw_data.draw_lists() {
       unsafe {
-        let vert_buf = renderer.gl.create_buffer_from_host(
-          grr::as_u8_slice(draw_list.vtx_buffer()),
-          grr::MemoryFlags::empty(),
-        )?;
-        let idx_buf = renderer.gl.create_buffer_from_host(
-          grr::as_u8_slice(draw_list.idx_buffer()),
-          grr::MemoryFlags::empty(),
-        )?;
-        r.shader.bind(renderer);
-        r.shader.set_mat4(
-          renderer,
-          0,
-          &Mat4::orthographic_rh(0.0, width, height, 0.0, 0.0, 1.0),
+        gl::BindBuffer(gl::ARRAY_BUFFER, r.vert_buf);
+        gl::BufferData(
+          gl::ARRAY_BUFFER,
+          (draw_list.vtx_buffer().len() * 20) as _,
+          draw_list.vtx_buffer().as_ptr() as _,
+          gl::STATIC_DRAW,
         );
-        renderer.gl.bind_vertex_array(r.vert_arr);
-        renderer.gl.bind_index_buffer(r.vert_arr, idx_buf);
-        renderer.gl.bind_vertex_buffers(
-          r.vert_arr,
-          0,
-          &[grr::VertexBufferView {
-            buffer: vert_buf,
-            offset: 0,
-            stride: std::mem::size_of::<imgui::DrawVert>() as _,
-            input_rate: grr::InputRate::Vertex,
-          }],
+        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, r.idx_buf);
+        gl::BufferData(
+          gl::ELEMENT_ARRAY_BUFFER,
+          (draw_list.idx_buffer().len() * 2) as _,
+          draw_list.idx_buffer().as_ptr() as _,
+          gl::STATIC_DRAW,
         );
-        let mut i = 0;
+        r.shader.bind();
+        r.shader
+          .set_mat4(0, &Mat4::orthographic_rh(0.0, width, height, 0.0, 0.0, 1.0));
         for cmd in draw_list.commands() {
           if let imgui::DrawCmd::Elements { count, cmd_params } = cmd {
             match textures.get(cmd_params.texture_id) {
-              Some(tex) => tex.bind(renderer),
+              Some(tex) => tex.bind(),
               None => warn!("Texture {} does not exist.", cmd_params.texture_id.id()),
             };
-
-            renderer.gl.set_scissor(
-              0,
-              &[grr::Region {
-                x: cmd_params.clip_rect[0] as _,
-                y: (height - cmd_params.clip_rect[3]) as _,
-                w: (cmd_params.clip_rect[2] - cmd_params.clip_rect[0])
-                  .abs()
-                  .ceil() as _,
-                h: (cmd_params.clip_rect[3] - cmd_params.clip_rect[1])
-                  .abs()
-                  .ceil() as _,
-              }],
+            gl::Scissor(
+              cmd_params.clip_rect[0] as _,
+              (height - cmd_params.clip_rect[3]) as _,
+              (cmd_params.clip_rect[2] - cmd_params.clip_rect[0]) as _,
+              (cmd_params.clip_rect[3] - cmd_params.clip_rect[1]) as _,
             );
-            renderer.gl.draw_indexed(
-              grr::Primitive::Triangles,
-              grr::IndexTy::U16,
-              i..i + count as u32,
-              0..1,
-              0,
+            gl::DrawElements(
+              gl::TRIANGLES,
+              count as _,
+              gl::UNSIGNED_SHORT,
+              (cmd_params.idx_offset * 2) as _,
             );
-            i += count as u32;
           }
         }
-        renderer.gl.delete_buffer(vert_buf);
-        renderer.gl.delete_buffer(idx_buf);
       }
     }
+    renderer.depth_test(true);
   }
   Ok(())
 }

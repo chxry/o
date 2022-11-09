@@ -7,7 +7,7 @@ use crate::{Result, HashMapExt, mutate};
 pub type System = &'static dyn Fn(&mut World) -> Result<()>;
 pub type EventHandler = &'static dyn Fn(&mut World, &Event<()>) -> Result<()>;
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
 pub enum Stage {
   Start,
   PreDraw,

@@ -12,7 +12,6 @@ use crate::ecs::{World, Stage, System, EventHandler};
 
 pub use glam as math;
 pub use log;
-pub use grr;
 pub use winit::event::Event;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -60,11 +59,8 @@ impl Engine {
         Event::RedrawRequested(_) => {
           // automate this
           self.world.run_system(Stage::PreDraw);
-          unsafe {
-            renderer.gl.bind_framebuffer(grr::Framebuffer::DEFAULT);
-          }
           renderer.resize(renderer.window.inner_size().into());
-          renderer.clear(grr::Framebuffer::DEFAULT);
+          renderer.clear();
           self.world.run_system(Stage::Draw);
           self.world.run_system(Stage::PostDraw);
 

@@ -1,7 +1,7 @@
 use phosphor::{Result, Engine};
 use phosphor::ecs::{World, Stage};
 use phosphor_3d::{Transform, Camera, Material, scenerenderer};
-use phosphor::gfx::{Renderer, Mesh, Texture};
+use phosphor::gfx::{Mesh, Texture};
 use phosphor_ui::{
   uirenderer,
   imgui::{Ui, Drag},
@@ -20,7 +20,6 @@ fn main() -> Result<()> {
 }
 
 fn start(world: &mut World) -> Result<()> {
-  let renderer = world.get_resource::<Renderer>().unwrap();
   world
     .spawn("cam")
     .insert(
@@ -32,11 +31,8 @@ fn start(world: &mut World) -> Result<()> {
   world
     .spawn("teapot")
     .insert(Transform::new())
-    .insert(Mesh::load(renderer, "res/teapot.obj")?)
-    .insert(Material::Textured(Texture::load(
-      renderer,
-      "res/brick.jpg",
-    )?));
+    .insert(Mesh::load("res/teapot.obj")?)
+    .insert(Material::Textured(Texture::load("res/brick.jpg")?));
   Ok(())
 }
 

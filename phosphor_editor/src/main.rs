@@ -3,23 +3,22 @@ mod panels;
 use phosphor::{Engine, Result, mutate};
 use phosphor::ecs::{Stage, World};
 use phosphor::log::LevelFilter;
+use phosphor_3d::{SceneRendererStage, scenerenderer};
 use phosphor_ui::{uirenderer, UiRendererOptions};
 use phosphor_ui::imgui::Ui;
-use phosphor_3d::{scenerenderer, SceneRendererOptions};
-use crate::panels::{Panel, setup_panels, update_panels};
+use crate::panels::{Panel, setup_panels};
 
 fn main() -> Result<()> {
   env_logger::builder().filter_level(LevelFilter::Info).init();
   Engine::new()
-    .add_resource(SceneRendererOptions { draw_stage: false })
     .add_resource(UiRendererOptions {
       docking: true,
       ini_path: Some("phosphor_editor/ui.ini"),
     })
+    .add_resource(SceneRendererStage(Stage::PreDraw))
     .add_system(Stage::Start, &uirenderer)
     .add_system(Stage::Start, &scenerenderer)
     .add_system(Stage::Start, &setup_panels)
-    .add_system(Stage::PreDraw, &update_panels)
     .add_system(Stage::Draw, &draw_ui)
     .run()
 }

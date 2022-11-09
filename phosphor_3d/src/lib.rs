@@ -1,6 +1,6 @@
 use std::ops::Range;
 use phosphor::Result;
-use phosphor::gfx::{Renderer, Shader, Texture, Mesh};
+use phosphor::gfx::{Renderer, Shader, Texture, Mesh, gl};
 use phosphor::ecs::{World, Stage};
 use phosphor::math::{Vec3, Quat, EulerRot, Mat4};
 use phosphor::log::warn;
@@ -61,15 +61,12 @@ pub enum Material {
   Color(Vec3),
 }
 
+pub struct SceneRendererStage(pub Stage);
+
 pub struct SceneRendererOptions {
-  pub draw_stage: bool,
+  pub fb: u32,
+  pub size: [f32; 2],
 }
-
-impl SceneRendererOptions {
-  const DEFAULT: Self = Self { draw_stage: true };
-}
-
-pub struct SceneAspect(pub f32);
 
 struct SceneRenderer {
   texture_shader: Shader,
@@ -77,38 +74,47 @@ struct SceneRenderer {
 }
 
 pub fn scenerenderer(world: &mut World) -> Result<()> {
-  let renderer = world.get_resource::<Renderer>().unwrap();
   world.add_resource(SceneRenderer {
-    texture_shader: Shader::new(renderer, "res/base.vert", "res/texture.frag")?,
-    color_shader: Shader::new(renderer, "res/base.vert", "res/color.frag")?,
+    texture_shader: Shader::new("res/base.vert", "res/texture.frag")?,
+    color_shader: Shader::new("res/base.vert", "res/color.frag")?,
   });
-  let options = match world.get_resource::<SceneRendererOptions>() {
-    Some(o) => o,
-    None => &SceneRendererOptions::DEFAULT,
-  };
-  if options.draw_stage {
-    world.add_system(Stage::Draw, &scenerenderer_draw);
-  }
+  world.add_system(
+    world
+      .get_resource::<SceneRendererStage>()
+      .unwrap_or(&mut SceneRendererStage(Stage::Draw))
+      .0,
+    &scenerenderer_draw,
+  );
   Ok(())
 }
 
-/// for advanced users, will automatically be called by scenerenderer
-pub fn scenerenderer_draw(world: &mut World) -> Result<()> {
+fn scenerenderer_draw(world: &mut World) -> Result<()> {
   match world.query::<Camera>().get(0) {
     Some((e, cam)) => match e.get::<Transform>() {
       Some(cam_t) => {
         let renderer = world.get_resource::<Renderer>().unwrap();
         let r = world.get_resource::<SceneRenderer>().unwrap();
-
-        let aspect = match world.get_resource::<SceneAspect>() {
-          Some(a) => a.0,
-          None => {
-            let size = renderer.window.inner_size();
-            size.width as f32 / size.height as f32
-          }
+        let d = SceneRendererOptions {
+          fb: 0,
+          size: renderer.window.inner_size().into(),
         };
+        let opts = match world.get_resource::<SceneRendererOptions>() {
+          Some(s) => s,
+          None => &d,
+        };
+        unsafe {
+          gl::BindFramebuffer(gl::FRAMEBUFFER, opts.fb);
+        }
+        renderer.resize(opts.size);
+        renderer.clear();
+
         let view = Mat4::look_to_rh(cam_t.position, cam_t.rotation.to_scaled_axis(), Vec3::Y);
-        let projection = Mat4::perspective_rh(cam.fov, aspect, cam.clip.start, cam.clip.end);
+        let projection = Mat4::perspective_rh(
+          cam.fov,
+          opts.size[0] / opts.size[1],
+          cam.clip.start,
+          cam.clip.end,
+        );
 
         for (e, mesh) in world.query::<Mesh>() {
           match e.get::<Transform>() {
@@ -118,27 +124,30 @@ pub fn scenerenderer_draw(world: &mut World) -> Result<()> {
                 .unwrap_or(&mut Material::Color(Vec3::splat(0.75)))
               {
                 Material::Textured(tex) => {
-                  r.texture_shader.bind(renderer);
-                  tex.bind(renderer);
+                  r.texture_shader.bind();
+                  tex.bind();
                   &r.texture_shader
                 }
                 Material::Color(col) => {
-                  r.color_shader.bind(renderer);
-                  r.color_shader.set_vec3(renderer, 3, col);
+                  r.color_shader.bind();
+                  r.color_shader.set_vec3(3, col);
                   &r.color_shader
                 }
               };
 
-              shader.set_mat4(renderer, 0, &mesh_t.as_mat4());
-              shader.set_mat4(renderer, 1, &view);
-              shader.set_mat4(renderer, 2, &projection);
-              mesh.draw(renderer);
+              shader.set_mat4(0, &mesh_t.as_mat4());
+              shader.set_mat4(1, &view);
+              shader.set_mat4(2, &projection);
+              mesh.draw();
             }
             None => warn!(
               "Mesh on entity {} won't be rendered (Missing Transform).",
               e.id
             ),
           }
+        }
+        unsafe {
+          gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
         }
       }
       None => warn!("Scene will not be rendered (Missing camera transform)."),

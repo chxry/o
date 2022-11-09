@@ -12,7 +12,7 @@ fn print_positions(world: &mut World) -> Result<()> {
   Ok(())
 }
 ```
-- **Resources:** Resources are used to represent global data. They can be any Rust type, for example `Renderer`, which holds OpenGL and window state.
+- **Resources:** Resources are used to represent global data. They can be any Rust type, for example `Renderer`, which holds window state.
 
 ## Creating a system
 
