@@ -25,20 +25,23 @@ fn main() -> Result<()> {
 
 fn draw_ui(world: &mut World) -> Result<()> {
   let ui = world.get_resource::<Ui>().unwrap();
-  let panels = world.get_resource::<Vec<Box<dyn Panel>>>().unwrap();
+  let panels = world.get_resource::<Vec<Panel>>().unwrap();
   ui.main_menu_bar(|| {
     ui.menu("View", || {
       for panel in panels.iter_mut() {
-        ui.menu_item_config(panel.title())
-          .build_with_ref(panel.open());
+        ui.menu_item_config(panel.title)
+          .build_with_ref(&mut panel.open);
       }
     });
   });
   for panel in panels {
-    if *panel.open() {
-      ui.window(panel.title()).build(|| {
-        panel.render(mutate(world), ui);
-      });
+    if panel.open {
+      ui.window(panel.title)
+        .flags(panel.flags)
+        .opened(&mut panel.open)
+        .build(|| {
+          (panel.render)(mutate(world), ui);
+        });
     }
   }
   Ok(())
