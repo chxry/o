@@ -5,10 +5,8 @@ edition = "2021"
 
 [dependencies]
 gl = "0.14"
-winit = "0.27"
-raw-gl-context = "0.1"
+glfw = "0.47"
 glam = "0.22"
 image = "0.24"
-bytemuck = { version = "1.4", features = ["derive"] }
 obj-rs = "0.7"
 log = "0.4"

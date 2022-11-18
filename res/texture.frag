@@ -1,10 +1,10 @@
-#version 450 core
+#version 330 core
 in vec2 v_uv;
 
-uniform sampler2D u_texture;
+uniform sampler2D tex;
 
 out vec4 f_color;
 
 void main() {
-	f_color = texture(u_texture, v_uv);
+	f_color = texture(tex, v_uv);
 }

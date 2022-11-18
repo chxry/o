@@ -1,15 +1,15 @@
-use phosphor::{Result, Engine};
+use phosphor::{Engine, Result};
 use phosphor::ecs::{World, Stage};
 use phosphor_3d::{Transform, Camera, Material, scenerenderer};
-use phosphor::gfx::{Mesh, Texture};
 use phosphor_ui::{
-  uirenderer,
   imgui::{Ui, Drag},
+  uirenderer,
 };
+use phosphor::gfx::{Mesh, Texture};
 use phosphor::log::LevelFilter;
 use phosphor::math::Vec3;
 
-fn main() -> Result<()> {
+fn main() -> Result {
   env_logger::builder().filter_level(LevelFilter::Info).init();
   Engine::new()
     .add_system(Stage::Start, &scenerenderer)
@@ -19,7 +19,7 @@ fn main() -> Result<()> {
     .run()
 }
 
-fn start(world: &mut World) -> Result<()> {
+fn start(world: &mut World) -> Result {
   world
     .spawn("cam")
     .insert(
@@ -36,7 +36,7 @@ fn start(world: &mut World) -> Result<()> {
   Ok(())
 }
 
-fn draw(world: &mut World) -> Result<()> {
+fn draw(world: &mut World) -> Result {
   let teapot = world.get_name("teapot").unwrap();
   let ui = world.get_resource::<Ui>().unwrap();
   ui.window("debug").always_auto_resize(true).build(|| {

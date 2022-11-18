@@ -1,12 +1,12 @@
-#version 450 core
-layout (location = 0) in vec2 a_uv;
-layout (location = 1) in vec4 a_color;
+#version 330 core
+in vec2 frag_uv;
+in vec4 frag_color;
 
-layout (binding = 0) uniform sampler2D u_texture;
+uniform sampler2D tex;
 
-layout (location = 0) out vec4 f_color;
+out vec4 f_color;
 
 void main() {
-    vec4 col = a_color * texture(u_texture, a_uv);
+    vec4 col = frag_color * texture(tex, frag_uv);
     f_color = vec4(pow(col.rgb,vec3(2.2)),col.w);
 }

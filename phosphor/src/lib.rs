@@ -4,17 +4,15 @@ pub mod ecs;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::any::Any;
-use std::error::Error;
-use winit::event_loop::{EventLoop, ControlFlow};
-use winit::event::WindowEvent;
+use glfw::Context;
 use crate::gfx::Renderer;
-use crate::ecs::{World, Stage, System, EventHandler};
+use crate::ecs::{World, Stage, System};
 
 pub use glam as math;
 pub use log;
-pub use winit::event::Event;
+pub use glfw;
 
-pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
+pub type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub struct Engine {
   world: World,
@@ -37,38 +35,24 @@ impl Engine {
     self
   }
 
-  pub fn add_event_handler(mut self, handler: EventHandler) -> Self {
-    self.world.add_event_handler(handler);
-    self
-  }
-
   pub fn run(mut self) -> Result<()> {
-    let event_loop = EventLoop::new();
-    self.world.add_resource(Renderer::new(&event_loop)?);
-
+    self.world.add_resource(Renderer::new()?);
+    let renderer = self.world.get_resource::<Renderer>().unwrap();
     self.world.run_system(Stage::Start);
-    event_loop.run(move |event, _, control_flow| {
-      let renderer = self.world.get_resource::<Renderer>().unwrap();
-      renderer.window.request_redraw();
-      self.world.run_event_handler(&event);
-      match event {
-        Event::WindowEvent {
-          event: WindowEvent::CloseRequested,
-          ..
-        } => *control_flow = ControlFlow::Exit,
-        Event::RedrawRequested(_) => {
-          // automate this
-          self.world.run_system(Stage::PreDraw);
-          renderer.resize(renderer.window.inner_size().into());
-          renderer.clear();
-          self.world.run_system(Stage::Draw);
-          self.world.run_system(Stage::PostDraw);
-
-          renderer.context.swap_buffers();
-        }
-        _ => {}
+    while !renderer.window.should_close() {
+      renderer.glfw.poll_events();
+      for (_, event) in renderer.events.try_iter() {
+        self.world.run_event_handler(event);
       }
-    })
+      let (w, h) = renderer.window.get_framebuffer_size();
+      renderer.resize(w, h);
+      renderer.clear();
+      self.world.run_system(Stage::PreDraw);
+      self.world.run_system(Stage::Draw);
+      self.world.run_system(Stage::PostDraw);
+      renderer.window.swap_buffers();
+    }
+    Ok(())
   }
 }
 

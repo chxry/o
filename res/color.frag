@@ -1,6 +1,6 @@
-#version 450 core
+#version 330 core
 
-layout (location = 3) uniform vec3 u_color;
+uniform vec3 u_color;
 
 out vec4 f_color;
 

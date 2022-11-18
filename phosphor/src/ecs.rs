@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::any::{Any, TypeId};
-use winit::event::Event;
+use glfw::WindowEvent;
 use log::error;
 use crate::{Result, HashMapExt, mutate};
 
-pub type System = &'static dyn Fn(&mut World) -> Result<()>;
-pub type EventHandler = &'static dyn Fn(&mut World, &Event<()>) -> Result<()>;
+pub type System = &'static dyn Fn(&mut World) -> Result;
+pub type EventHandler = &'static dyn Fn(&mut World, &WindowEvent) -> Result<()>;
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
 pub enum Stage {
@@ -121,9 +121,9 @@ impl World {
     self.event_handlers.push(handler);
   }
 
-  pub fn run_event_handler(&self, event: &Event<()>) {
+  pub fn run_event_handler(&self, event: WindowEvent) {
     for handler in self.event_handlers.clone() {
-      if let Err(e) = handler(mutate(self), event) {
+      if let Err(e) = handler(mutate(self), &event) {
         error!("Error in event handler: {}", e);
       }
     }

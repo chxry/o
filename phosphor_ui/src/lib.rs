@@ -1,7 +1,10 @@
 use std::{fs, path};
 use std::time::Instant;
-use imgui::{StyleColor, ConfigFlags};
-use phosphor::{Result, Event};
+use imgui::{StyleColor, ConfigFlags, MouseCursor, BackendFlags, Key};
+use phosphor::glfw::{
+  Cursor, StandardCursor, CursorMode, WindowEvent, Action, Modifiers, MouseButton, Key as GlfwKey,
+};
+use phosphor::Result;
 use phosphor::gfx::{Renderer, Shader, Texture, gl};
 use phosphor::ecs::{World, Stage};
 use phosphor::math::Mat4;
@@ -25,7 +28,6 @@ impl UiRendererOptions {
 
 struct UiRenderer {
   imgui: imgui::Context,
-  platform: imgui_winit_support::WinitPlatform,
   shader: Shader,
   vert_arr: u32,
   vert_buf: u32,
@@ -45,6 +47,33 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
     imgui.io_mut().config_flags |= ConfigFlags::DOCKING_ENABLE;
   }
   imgui.set_ini_filename(options.ini_path.map(|s| path::PathBuf::from(s)));
+  let (w, h) = renderer.window.get_size();
+  let io = imgui.io_mut();
+  io.display_size = [w as _, h as _];
+  io.backend_flags.insert(BackendFlags::HAS_MOUSE_CURSORS);
+  io.backend_flags.insert(BackendFlags::HAS_SET_MOUSE_POS);
+  io[Key::Tab] = GlfwKey::Tab as _;
+  io[Key::LeftArrow] = GlfwKey::Left as _;
+  io[Key::RightArrow] = GlfwKey::Right as _;
+  io[Key::UpArrow] = GlfwKey::Up as _;
+  io[Key::DownArrow] = GlfwKey::Down as _;
+  io[Key::PageUp] = GlfwKey::PageUp as _;
+  io[Key::PageDown] = GlfwKey::PageDown as _;
+  io[Key::Home] = GlfwKey::Home as _;
+  io[Key::End] = GlfwKey::End as _;
+  io[Key::Insert] = GlfwKey::Insert as _;
+  io[Key::Delete] = GlfwKey::Delete as _;
+  io[Key::Backspace] = GlfwKey::Backspace as _;
+  io[Key::Space] = GlfwKey::Space as _;
+  io[Key::Enter] = GlfwKey::Enter as _;
+  io[Key::Escape] = GlfwKey::Escape as _;
+  io[Key::KeyPadEnter] = GlfwKey::KpEnter as _;
+  io[Key::A] = GlfwKey::A as _;
+  io[Key::C] = GlfwKey::C as _;
+  io[Key::V] = GlfwKey::V as _;
+  io[Key::X] = GlfwKey::X as _;
+  io[Key::Y] = GlfwKey::Y as _;
+  io[Key::Z] = GlfwKey::Z as _;
 
   let mut fonts = imgui.fonts();
   fonts.add_font(&[imgui::FontSource::TtfData {
@@ -54,11 +83,7 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
   }]);
   let font_tex = fonts.build_rgba32_texture();
   let mut textures = imgui::Textures::new();
-  fonts.tex_id = textures.insert(Texture::new(
-    font_tex.data,
-    font_tex.width,
-    font_tex.height,
-  )?);
+  fonts.tex_id = textures.insert(Texture::new(font_tex.data, font_tex.width, font_tex.height));
   drop(fonts);
   let style = imgui.style_mut();
   style[StyleColor::Text] = [1.00, 1.00, 1.00, 1.00];
@@ -120,12 +145,6 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
   style.popup_rounding = 4.0;
   style.frame_rounding = 2.0;
 
-  let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui);
-  platform.attach_window(
-    imgui.io_mut(),
-    &renderer.window,
-    imgui_winit_support::HiDpiMode::Locked(1.0),
-  );
   let shader = Shader::new("res/imgui.vert", "res/imgui.frag")?;
   let mut vert_arr = 0;
   let mut vert_buf = 0;
@@ -146,7 +165,6 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
   }
   world.add_resource(UiRenderer {
     imgui,
-    platform,
     shader,
     vert_arr,
     vert_buf,
@@ -160,19 +178,60 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
   Ok(())
 }
 
-fn uirenderer_event(world: &mut World, event: &Event<()>) -> Result<()> {
-  let renderer = world.get_resource::<Renderer>().unwrap();
+fn uirenderer_event(world: &mut World, event: &WindowEvent) -> Result<()> {
   let r = world.get_resource::<UiRenderer>().unwrap();
-  r.platform
-    .handle_event(r.imgui.io_mut(), &renderer.window, event);
+  let io = r.imgui.io_mut();
+  match *event {
+    WindowEvent::Key(key, _scancode, action, modifiers) => {
+      if key as i32 >= 0 {
+        if action == Action::Release {
+          io.keys_down[key as usize] = false;
+        } else {
+          io.keys_down[key as usize] = true;
+        }
+      }
+      io.key_shift = modifiers.contains(Modifiers::Shift);
+      io.key_ctrl = modifiers.contains(Modifiers::Control);
+      io.key_alt = modifiers.contains(Modifiers::Alt);
+      io.key_super = modifiers.contains(Modifiers::Super);
+    }
+    WindowEvent::Size(width, height) => {
+      io.display_size = [width as _, height as _];
+    }
+    WindowEvent::Char(ch) => {
+      if ch != '\u{7f}' {
+        io.add_input_character(ch);
+      }
+    }
+    WindowEvent::CursorPos(x, y) => {
+      io.mouse_pos = [x as _, y as _];
+    }
+    WindowEvent::Scroll(x, y) => {
+      io.mouse_wheel_h = x as _;
+      io.mouse_wheel = y as _;
+    }
+    WindowEvent::MouseButton(button, action, _modifiers) => {
+      let pressed = action == Action::Press;
+      match button {
+        MouseButton::Button1 => io.mouse_down[0] = pressed,
+        MouseButton::Button2 => io.mouse_down[1] = pressed,
+        MouseButton::Button3 => io.mouse_down[2] = pressed,
+        _ => (),
+      }
+    }
+    _ => {}
+  }
   Ok(())
 }
 
 fn uirenderer_predraw(world: &mut World) -> Result<()> {
   let renderer = world.get_resource::<Renderer>().unwrap();
   let r = world.get_resource::<UiRenderer>().unwrap();
-  r.platform
-    .prepare_frame(r.imgui.io_mut(), &renderer.window)?;
+  let io = r.imgui.io();
+  if io.want_set_mouse_pos {
+    let [x, y] = io.mouse_pos;
+    renderer.window.set_cursor_pos(x as _, y as _);
+  }
   let ui = r.imgui.frame();
 
   let options = match world.get_resource::<UiRendererOptions>() {
@@ -191,39 +250,60 @@ fn uirenderer_predraw(world: &mut World) -> Result<()> {
 fn uirenderer_draw(world: &mut World) -> Result<()> {
   if let Some(ui) = world.take_resource::<imgui::Ui>() {
     let renderer = world.get_resource::<Renderer>().unwrap();
-    renderer.depth_test(false);
     let textures = world.get_resource::<Textures>().unwrap();
     let r = world.get_resource::<UiRenderer>().unwrap();
     unsafe {
+      gl::Disable(gl::DEPTH_TEST);
       gl::BindVertexArray(r.vert_arr);
-    }
-    let io = r.imgui.io_mut();
-    let [width, height] = io.display_size;
-    let now = Instant::now();
-    io.update_delta_time(now - r.last_frame);
-    r.last_frame = now;
+      let io = r.imgui.io_mut();
+      let [width, height] = io.display_size;
+      let now = Instant::now();
+      io.update_delta_time(now - r.last_frame);
+      r.last_frame = now;
+      if !io
+        .config_flags
+        .contains(ConfigFlags::NO_MOUSE_CURSOR_CHANGE)
+      {
+        match ui.mouse_cursor() {
+          Some(mouse_cursor) if !io.mouse_draw_cursor => {
+            renderer.window.set_cursor_mode(CursorMode::Normal);
+            renderer.window.set_cursor(Some(match mouse_cursor {
+              MouseCursor::Arrow => Cursor::standard(StandardCursor::Arrow),
+              MouseCursor::ResizeAll => Cursor::standard(StandardCursor::Arrow),
+              MouseCursor::ResizeNS => Cursor::standard(StandardCursor::VResize),
+              MouseCursor::ResizeEW => Cursor::standard(StandardCursor::HResize),
+              MouseCursor::ResizeNESW => Cursor::standard(StandardCursor::Arrow),
+              MouseCursor::ResizeNWSE => Cursor::standard(StandardCursor::Arrow),
+              MouseCursor::Hand => Cursor::standard(StandardCursor::Hand),
+              MouseCursor::NotAllowed => Cursor::standard(StandardCursor::Crosshair),
+              MouseCursor::TextInput => Cursor::standard(StandardCursor::IBeam),
+            }));
+          }
+          _ => renderer.window.set_cursor_mode(CursorMode::Hidden),
+        }
+      }
 
-    r.platform.prepare_render(&ui, &renderer.window);
-    let draw_data = r.imgui.render();
-    for draw_list in draw_data.draw_lists() {
-      unsafe {
+      let draw_data = r.imgui.render();
+      for draw_list in draw_data.draw_lists() {
         gl::BindBuffer(gl::ARRAY_BUFFER, r.vert_buf);
         gl::BufferData(
           gl::ARRAY_BUFFER,
           (draw_list.vtx_buffer().len() * 20) as _,
           draw_list.vtx_buffer().as_ptr() as _,
-          gl::STATIC_DRAW,
+          gl::DYNAMIC_DRAW,
         );
         gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, r.idx_buf);
         gl::BufferData(
           gl::ELEMENT_ARRAY_BUFFER,
           (draw_list.idx_buffer().len() * 2) as _,
           draw_list.idx_buffer().as_ptr() as _,
-          gl::STATIC_DRAW,
+          gl::DYNAMIC_DRAW,
         );
         r.shader.bind();
-        r.shader
-          .set_mat4(0, &Mat4::orthographic_rh(0.0, width, height, 0.0, 0.0, 1.0));
+        r.shader.set_mat4(
+          "transform",
+          &Mat4::orthographic_rh(0.0, width, height, 0.0, 0.0, 1.0),
+        );
         for cmd in draw_list.commands() {
           if let imgui::DrawCmd::Elements { count, cmd_params } = cmd {
             match textures.get(cmd_params.texture_id) {
@@ -245,8 +325,8 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
           }
         }
       }
+      gl::Enable(gl::DEPTH_TEST);
     }
-    renderer.depth_test(true);
   }
   Ok(())
 }

@@ -1,9 +1,8 @@
 use std::fs::{self, File};
 use std::io::BufReader;
-use std::ffi::CStr;
-use winit::window::{WindowBuilder, Window};
-use winit::event_loop::EventLoop;
-use raw_gl_context::{GlConfig, GlContext, Profile};
+use std::ffi::{CStr, CString};
+use std::sync::mpsc::Receiver;
+use glfw::{Context, WindowEvent};
 use glam::{Mat4, Vec3};
 use obj::{Obj, TexturedVertex};
 use log::info;
@@ -12,37 +11,29 @@ use crate::Result;
 pub use gl;
 
 pub struct Renderer {
-  pub window: Window,
-  pub context: GlContext,
+  pub glfw: glfw::Glfw,
+  pub window: glfw::Window,
+  pub events: Receiver<(f64, WindowEvent)>,
 }
 
 impl Renderer {
-  pub fn new(event_loop: &EventLoop<()>) -> Result<Self> {
-    unsafe {
-      let window = WindowBuilder::new().build(event_loop)?;
-      let context = GlContext::create(
-        &window,
-        GlConfig {
-          version: (4, 5),
-          profile: Profile::Core,
-          red_bits: 8,
-          blue_bits: 8,
-          green_bits: 8,
-          alpha_bits: 0,
-          depth_bits: 0,
-          stencil_bits: 0,
-          samples: None,
-          srgb: true,
-          double_buffer: true,
-          vsync: true,
-        },
-      )
+  pub fn new() -> Result<Self> {
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    glfw.window_hint(glfw::WindowHint::ContextVersion(3, 3));
+    glfw.window_hint(glfw::WindowHint::OpenGlProfile(
+      glfw::OpenGlProfileHint::Core,
+    ));
+    glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
+    let (mut window, events) = glfw
+      .create_window(800, 600, "phosphor", glfw::WindowMode::Windowed)
       .unwrap();
-      context.make_current();
-      gl::load_with(|s| context.get_proc_address(s));
+    window.make_current();
+    window.set_all_polling(true);
+    gl::load_with(|s| window.get_proc_address(s));
+    unsafe {
       gl::Enable(gl::FRAMEBUFFER_SRGB);
       gl::Enable(gl::DEPTH_TEST);
-      gl::Enable(gl::SCISSOR_TEST);
+      // gl::Enable(gl::SCISSOR_TEST);
       gl::Enable(gl::BLEND);
       gl::BlendFuncSeparate(
         gl::SRC_ALPHA,
@@ -53,14 +44,18 @@ impl Renderer {
       let version = CStr::from_ptr(gl::GetString(gl::VERSION) as _).to_str()?;
       let renderer = CStr::from_ptr(gl::GetString(gl::RENDERER) as _).to_str()?;
       info!("Created OpenGL {} renderer on {}.", version, renderer);
-      Ok(Self { window, context })
     }
+    Ok(Self {
+      glfw,
+      window,
+      events,
+    })
   }
 
-  pub fn resize(&self, size: [f32; 2]) {
+  pub fn resize(&self, w: i32, h: i32) {
     unsafe {
-      gl::Viewport(0, 0, size[0] as _, size[1] as _);
-      gl::Scissor(0, 0, size[0] as _, size[1] as _);
+      gl::Viewport(0, 0, w, h);
+      gl::Scissor(0, 0, w, h);
     }
   }
 
@@ -68,12 +63,6 @@ impl Renderer {
     unsafe {
       gl::ClearColor(0.0, 0.0, 0.0, 1.0);
       gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-    }
-  }
-
-  pub fn depth_test(&self, b: bool) {
-    unsafe {
-      (if b { gl::Enable } else { gl::Disable })(gl::DEPTH_TEST);
     }
   }
 }
@@ -117,14 +106,25 @@ impl Shader {
     unsafe { gl::UseProgram(self.0) }
   }
 
-  pub fn set_mat4(&self, i: i32, val: &Mat4) {
+  fn get_loc(&self, name: &'static str) -> i32 {
+    let c = CString::new(name).unwrap();
+    unsafe { gl::GetUniformLocation(self.0, c.as_ptr() as _) }
+  }
+
+  pub fn set_mat4(&self, name: &'static str, val: &Mat4) {
     unsafe {
-      gl::ProgramUniformMatrix4fv(self.0 as _, i, 1, gl::FALSE, val.to_cols_array().as_ptr())
+      gl::ProgramUniformMatrix4fv(
+        self.0 as _,
+        self.get_loc(name),
+        1,
+        gl::FALSE,
+        val.to_cols_array().as_ptr(),
+      )
     }
   }
 
-  pub fn set_vec3(&self, i: i32, val: &Vec3) {
-    unsafe { gl::ProgramUniform3fv(self.0 as _, i, 1, val.to_array().as_ptr()) }
+  pub fn set_vec3(&self, name: &'static str, val: &Vec3) {
+    unsafe { gl::ProgramUniform3fv(self.0 as _, self.get_loc(name), 1, val.to_array().as_ptr()) }
   }
 }
 
@@ -142,7 +142,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
-  pub fn new(vertices: Vec<Vertex>, indices: Vec<u16>) -> Result<Self> {
+  pub fn new(vertices: &[Vertex], indices: &[u16]) -> Self {
     unsafe {
       let mut vert_arr = 0;
       gl::GenVertexArrays(1, &mut vert_arr);
@@ -168,29 +168,29 @@ impl Mesh {
       gl::EnableVertexAttribArray(0);
       gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 20, 0 as _);
       gl::EnableVertexAttribArray(1);
-      gl::VertexAttribPointer(1, 2, gl::FLOAT, gl::TRUE, 20, 12 as _);
-      Ok(Self {
+      gl::VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, 20, 12 as _);
+      Self {
         vert_arr,
         vert_buf,
         idx_buf,
         len: indices.len() as _,
-      })
+      }
     }
   }
 
   pub fn load(path: &str) -> Result<Self> {
     let obj: Obj<TexturedVertex> = obj::load_obj(BufReader::new(File::open(path)?))?;
-    Self::new(
-      obj
+    Ok(Self::new(
+      &obj
         .vertices
         .iter()
         .map(|v| Vertex {
           pos: v.position,
           uv: [v.texture[0], v.texture[1]],
         })
-        .collect(),
-      obj.indices,
-    )
+        .collect::<Vec<_>>(),
+      &obj.indices,
+    ))
   }
 
   pub fn draw(&self) {
@@ -209,7 +209,7 @@ impl Mesh {
 pub struct Texture(pub u32);
 
 impl Texture {
-  pub fn new(data: &[u8], width: u32, height: u32) -> Result<Self> {
+  pub fn new(data: &[u8], width: u32, height: u32) -> Self {
     unsafe {
       let mut tex = 0;
       gl::GenTextures(1, &mut tex);
@@ -225,41 +225,20 @@ impl Texture {
         0,
         gl::RGBA,
         gl::UNSIGNED_BYTE,
-        if data.is_empty() {
-          std::ptr::null()
-        } else {
-          data.as_ptr() as _
-        },
+        data.as_ptr() as _,
       );
-      Ok(Self(tex))
+      Self(tex)
     }
   }
 
   pub fn load(path: &str) -> Result<Self> {
     let img = image::open(path)?.to_rgba8();
-    Self::new(img.as_raw(), img.width(), img.height())
+    Ok(Self::new(img.as_raw(), img.width(), img.height()))
   }
 
   pub fn bind(&self) {
     unsafe {
       gl::BindTexture(gl::TEXTURE_2D, self.0);
-    }
-  }
-
-  pub fn resize(&self, width: u32, height: u32) {
-    unsafe {
-      gl::BindTexture(gl::TEXTURE_2D, self.0);
-      gl::TexImage2D(
-        gl::TEXTURE_2D,
-        0,
-        gl::SRGB_ALPHA as _,
-        width as _,
-        height as _,
-        0,
-        gl::RGBA,
-        gl::UNSIGNED_BYTE,
-        std::ptr::null(),
-      );
     }
   }
 }
