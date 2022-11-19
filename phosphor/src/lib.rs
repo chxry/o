@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::any::Any;
 use glfw::Context;
-use crate::gfx::Renderer;
+use crate::gfx::{Renderer, Framebuffer};
 use crate::ecs::{World, Stage, System};
 
 pub use glam as math;
@@ -44,9 +44,6 @@ impl Engine {
       for (_, event) in renderer.events.try_iter() {
         self.world.run_event_handler(event);
       }
-      let (w, h) = renderer.window.get_framebuffer_size();
-      renderer.resize(w, h);
-      renderer.clear();
       self.world.run_system(Stage::PreDraw);
       self.world.run_system(Stage::Draw);
       self.world.run_system(Stage::PostDraw);

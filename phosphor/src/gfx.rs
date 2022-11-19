@@ -206,7 +206,7 @@ impl Mesh {
   }
 }
 
-pub struct Texture(pub u32);
+pub struct Texture(u32);
 
 impl Texture {
   pub fn new(data: &[u8], width: u32, height: u32) -> Self {
@@ -231,6 +231,28 @@ impl Texture {
     }
   }
 
+  pub fn empty() -> Self {
+    unsafe {
+      let mut tex = 0;
+      gl::GenTextures(1, &mut tex);
+      gl::BindTexture(gl::TEXTURE_2D, tex);
+      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as _);
+      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as _);
+      gl::TexImage2D(
+        gl::TEXTURE_2D,
+        0,
+        gl::SRGB_ALPHA as _,
+        0,
+        0,
+        0,
+        gl::RGBA,
+        gl::UNSIGNED_BYTE,
+        0 as _,
+      );
+      Self(tex)
+    }
+  }
+
   pub fn load(path: &str) -> Result<Self> {
     let img = image::open(path)?.to_rgba8();
     Ok(Self::new(img.as_raw(), img.width(), img.height()))
@@ -239,6 +261,57 @@ impl Texture {
   pub fn bind(&self) {
     unsafe {
       gl::BindTexture(gl::TEXTURE_2D, self.0);
+    }
+  }
+
+  pub fn resize(&self, width: u32, height: u32) {
+    unsafe {
+      self.bind();
+      gl::TexImage2D(
+        gl::TEXTURE_2D,
+        0,
+        gl::SRGB_ALPHA as _,
+        width as _,
+        height as _,
+        0,
+        gl::RGBA,
+        gl::UNSIGNED_BYTE,
+        0 as _,
+      );
+    }
+  }
+}
+
+#[derive(Copy, Clone)]
+pub struct Framebuffer(u32);
+
+impl Framebuffer {
+  pub const DEFAULT: Framebuffer = Self(0);
+
+  pub fn new() -> Self {
+    unsafe {
+      let mut fb = 0;
+      gl::GenFramebuffers(1, &mut fb);
+      Self(fb)
+    }
+  }
+
+  pub fn bind(&self) {
+    unsafe {
+      gl::BindFramebuffer(gl::FRAMEBUFFER, self.0);
+    }
+  }
+
+  pub fn bind_tex(&self, tex: &Texture) {
+    unsafe {
+      self.bind();
+      gl::FramebufferTexture2D(
+        gl::FRAMEBUFFER,
+        gl::COLOR_ATTACHMENT0,
+        gl::TEXTURE_2D,
+        tex.0,
+        0,
+      );
     }
   }
 }
