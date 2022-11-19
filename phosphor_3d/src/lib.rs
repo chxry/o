@@ -88,7 +88,6 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
         let (w, h) = renderer.window.get_framebuffer_size();
         let aspect = match world.get_resource::<SceneDrawOptions>() {
           Some(o) => {
-            //maybe clear and resize
             o.fb.bind();
             renderer.resize(o.size[0] as _, o.size[1] as _);
             renderer.clear();
@@ -102,7 +101,7 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
         };
         let r = world.get_resource::<SceneRenderer>().unwrap();
 
-        let view = Mat4::look_at_rh(cam_t.position, cam_t.rotation.to_scaled_axis(), Vec3::Y);
+        let view = Mat4::look_to_rh(cam_t.position, cam_t.rotation.to_scaled_axis(), Vec3::Y);
         let projection = Mat4::perspective_rh(cam.fov, aspect, cam.clip.start, cam.clip.end);
 
         for (e, mesh) in world.query::<Mesh>() {

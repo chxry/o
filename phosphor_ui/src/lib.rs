@@ -267,7 +267,7 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
       {
         match ui.mouse_cursor() {
           Some(mouse_cursor) if !io.mouse_draw_cursor => {
-            renderer.window.set_cursor_mode(CursorMode::Normal);
+            // renderer.window.set_cursor_mode(CursorMode::Normal);
             renderer.window.set_cursor(Some(match mouse_cursor {
               MouseCursor::Arrow => Cursor::standard(StandardCursor::Arrow),
               MouseCursor::ResizeAll => Cursor::standard(StandardCursor::Arrow),
@@ -291,7 +291,6 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
         &Mat4::orthographic_rh(0.0, w as _, h as _, 0.0, 0.0, 1.0),
       );
       let [scale_w, scale_h] = ui.io().display_framebuffer_scale;
-      let [fb_w, fb_h] = [w * scale_w, h * scale_h];
 
       let draw_data = r.imgui.render();
       for draw_list in draw_data.draw_lists() {
@@ -317,7 +316,7 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
             };
             gl::Scissor(
               (cmd_params.clip_rect[0] * scale_w) as _,
-              (fb_h - cmd_params.clip_rect[3] * scale_h) as _,
+              (h * scale_h - cmd_params.clip_rect[3] * scale_h) as _,
               ((cmd_params.clip_rect[2] - cmd_params.clip_rect[0]) * scale_w) as _,
               ((cmd_params.clip_rect[3] - cmd_params.clip_rect[1]) * scale_h) as _,
             );

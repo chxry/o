@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::any::Any;
 use glfw::Context;
-use crate::gfx::{Renderer, Framebuffer};
+use crate::gfx::Renderer;
 use crate::ecs::{World, Stage, System};
 
 pub use glam as math;

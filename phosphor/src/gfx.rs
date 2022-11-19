@@ -25,7 +25,7 @@ impl Renderer {
     ));
     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
     let (mut window, events) = glfw
-      .create_window(800, 600, "phosphor", glfw::WindowMode::Windowed)
+      .create_window(1400, 800, "phosphor", glfw::WindowMode::Windowed)
       .unwrap();
     window.make_current();
     window.set_all_polling(true);

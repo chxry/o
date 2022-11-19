@@ -1,7 +1,8 @@
 use phosphor::Result;
 use phosphor::ecs::{World, Name, Stage};
-use phosphor::gfx::{Texture, Mesh, Framebuffer, gl};
-use phosphor::math::Vec3;
+use phosphor::gfx::{Texture, Mesh, Framebuffer, Renderer};
+use phosphor::glfw::{Key, Action, CursorMode, MouseButton};
+use phosphor::math::{Vec3, Quat};
 use phosphor_ui::Textures;
 use phosphor_ui::imgui::{Ui, Image, TextureId, WindowFlags};
 use phosphor_3d::{Camera, Transform, SceneDrawOptions, scenerenderer};
@@ -24,19 +25,19 @@ pub fn setup_panels(world: &mut World) -> Result<()> {
 
 struct SceneState {
   size: [f32; 2],
+  focused: bool,
   fb: Framebuffer,
   tex: TextureId,
+  last_pos: (f32, f32),
+  yaw: f32,
+  pitch: f32,
 }
 
 fn scene_init(world: &mut World) -> Result<Panel> {
   let textures = world.get_resource::<Textures>().unwrap();
   world
     .spawn("cam")
-    .insert(
-      Transform::new()
-        .pos(Vec3::new(0.0, 1.0, -10.0))
-        .rot_euler(Vec3::new(0.0, 0.0, 1.5)),
-    )
+    .insert(Transform::new().pos(Vec3::new(0.0, 1.0, -10.0)))
     .insert(Camera::new(0.8, 0.1..100.0));
   world
     .spawn("teapot")
@@ -48,8 +49,12 @@ fn scene_init(world: &mut World) -> Result<Panel> {
   let tex = textures.insert(tex);
   world.add_resource(SceneState {
     size: [0.0, 0.0],
+    focused: false,
     fb,
     tex,
+    last_pos: (0.0, 0.0),
+    yaw: 1.5,
+    pitch: 0.0,
   });
   scenerenderer(world)?;
   world.add_system(Stage::PreDraw, &scene_predraw);
@@ -62,7 +67,49 @@ fn scene_init(world: &mut World) -> Result<Panel> {
 }
 
 fn scene_predraw(world: &mut World) -> Result {
+  let renderer = world.get_resource::<Renderer>().unwrap();
   let s = world.get_resource::<SceneState>().unwrap();
+  if s.focused {
+    // todo show warning if no camera
+    let (e, cam) = &world.query::<Camera>()[0];
+    let cam_t = e.get::<Transform>().unwrap();
+
+    if renderer.window.get_mouse_button(MouseButton::Button1) == Action::Press {
+      let pos = renderer.window.get_cursor_pos();
+      let (x, y) = (pos.0 as _, pos.1 as _);
+      if renderer.window.get_cursor_mode() != CursorMode::Disabled {
+        s.last_pos = (x, y);
+        renderer.window.set_cursor_mode(CursorMode::Disabled);
+      }
+      let (dx, dy) = (x - s.last_pos.0, y - s.last_pos.1);
+      s.last_pos = (x, y);
+      s.yaw += dx / 300.0;
+      s.pitch = (s.pitch - dy / 300.0).clamp(-1.5, 1.5);
+    } else {
+      renderer.window.set_cursor_mode(CursorMode::Normal);
+    }
+
+    let dir = Vec3::new(
+      s.yaw.cos() * s.pitch.cos(),
+      s.pitch.sin(),
+      s.yaw.sin() * s.pitch.cos(),
+    ) * 0.15;
+    cam_t.rotation = Quat::from_scaled_axis(dir);
+    // let dir = cam_t.rotation.to_scaled_axis() * 0.15;
+    let right = dir.cross(Vec3::Y);
+    if renderer.window.get_key(Key::W) == Action::Press {
+      cam_t.position += dir;
+    }
+    if renderer.window.get_key(Key::S) == Action::Press {
+      cam_t.position -= dir;
+    }
+    if renderer.window.get_key(Key::A) == Action::Press {
+      cam_t.position -= right
+    }
+    if renderer.window.get_key(Key::D) == Action::Press {
+      cam_t.position += right;
+    }
+  }
   world.add_resource(SceneDrawOptions {
     fb: s.fb,
     size: s.size,
@@ -73,10 +120,13 @@ fn scene_predraw(world: &mut World) -> Result {
 fn scene_render(world: &mut World, ui: &Ui) {
   let s = world.get_resource::<SceneState>().unwrap();
   s.size = ui.window_size();
+  s.focused = ui.is_window_focused();
   Image::new(s.tex, s.size)
     .uv0([0.0, 1.0])
     .uv1([1.0, 0.0])
     .build(&ui);
+  ui.set_cursor_pos([32.0, 48.0]);
+  ui.text(format!("{}/{}", s.yaw, s.pitch));
   let tex = world
     .get_resource::<Textures>()
     .unwrap()
