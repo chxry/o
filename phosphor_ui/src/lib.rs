@@ -47,9 +47,11 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
     imgui.io_mut().config_flags |= ConfigFlags::DOCKING_ENABLE;
   }
   imgui.set_ini_filename(options.ini_path.map(|s| path::PathBuf::from(s)));
-  let (w, h) = renderer.window.get_size();
   let io = imgui.io_mut();
+  let (w, h) = renderer.window.get_size();
+  let (scale_w, scale_h) = renderer.window.get_content_scale();
   io.display_size = [w as _, h as _];
+  io.display_framebuffer_scale = [scale_w, scale_h];
   io.backend_flags.insert(BackendFlags::HAS_MOUSE_CURSORS);
   io.backend_flags.insert(BackendFlags::HAS_SET_MOUSE_POS);
   io[Key::Tab] = GlfwKey::Tab as _;
@@ -256,7 +258,6 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
       gl::Disable(gl::DEPTH_TEST);
       gl::BindVertexArray(r.vert_arr);
       let io = r.imgui.io_mut();
-      let [width, height] = io.display_size;
       let now = Instant::now();
       io.update_delta_time(now - r.last_frame);
       r.last_frame = now;
@@ -283,6 +284,15 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
         }
       }
 
+      let [w, h] = ui.io().display_size;
+      r.shader.bind();
+      r.shader.set_mat4(
+        "transform",
+        &Mat4::orthographic_rh(0.0, w as _, h as _, 0.0, 0.0, 1.0),
+      );
+      let [scale_w, scale_h] = ui.io().display_framebuffer_scale;
+      let [fb_w, fb_h] = [w * scale_w, h * scale_h];
+
       let draw_data = r.imgui.render();
       for draw_list in draw_data.draw_lists() {
         gl::BindBuffer(gl::ARRAY_BUFFER, r.vert_buf);
@@ -299,11 +309,6 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
           draw_list.idx_buffer().as_ptr() as _,
           gl::DYNAMIC_DRAW,
         );
-        r.shader.bind();
-        r.shader.set_mat4(
-          "transform",
-          &Mat4::orthographic_rh(0.0, width, height, 0.0, 0.0, 1.0),
-        );
         for cmd in draw_list.commands() {
           if let imgui::DrawCmd::Elements { count, cmd_params } = cmd {
             match textures.get(cmd_params.texture_id) {
@@ -311,10 +316,10 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
               None => warn!("Texture {} does not exist.", cmd_params.texture_id.id()),
             };
             gl::Scissor(
-              cmd_params.clip_rect[0] as _,
-              (height - cmd_params.clip_rect[3]) as _,
-              (cmd_params.clip_rect[2] - cmd_params.clip_rect[0]) as _,
-              (cmd_params.clip_rect[3] - cmd_params.clip_rect[1]) as _,
+              (cmd_params.clip_rect[0] * scale_w) as _,
+              (fb_h - cmd_params.clip_rect[3] * scale_h) as _,
+              ((cmd_params.clip_rect[2] - cmd_params.clip_rect[0]) * scale_w) as _,
+              ((cmd_params.clip_rect[3] - cmd_params.clip_rect[1]) * scale_h) as _,
             );
             gl::DrawElements(
               gl::TRIANGLES,

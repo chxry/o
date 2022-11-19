@@ -33,7 +33,7 @@ impl Renderer {
     unsafe {
       gl::Enable(gl::FRAMEBUFFER_SRGB);
       gl::Enable(gl::DEPTH_TEST);
-      // gl::Enable(gl::SCISSOR_TEST);
+      gl::Enable(gl::SCISSOR_TEST);
       gl::Enable(gl::BLEND);
       gl::BlendFuncSeparate(
         gl::SRC_ALPHA,
