@@ -4,7 +4,7 @@ use phosphor::{Engine, Result, mutate};
 use phosphor::ecs::{Stage, World};
 use phosphor::log::LevelFilter;
 use phosphor_ui::{uirenderer, UiRendererOptions};
-use phosphor_ui::imgui::Ui;
+use phosphor_ui::imgui::{Ui, StyleStackToken};
 use crate::panels::{Panel, setup_panels};
 
 pub struct SelectedEntity(Option<usize>);
@@ -36,12 +36,16 @@ fn draw_ui(world: &mut World) -> Result<()> {
   });
   for panel in panels {
     if panel.open {
+      let tokens: Vec<StyleStackToken> = panel.vars.iter().map(|v| ui.push_style_var(*v)).collect();
       ui.window(panel.title)
         .flags(panel.flags)
         .opened(&mut panel.open)
         .build(|| {
           (panel.render)(mutate(world), ui);
         });
+      for token in tokens {
+        token.pop();
+      }
     }
   }
   Ok(())

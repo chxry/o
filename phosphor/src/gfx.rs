@@ -67,7 +67,7 @@ impl Renderer {
   }
 }
 
-pub struct Shader(u32);
+pub struct Shader(pub u32);
 
 impl Shader {
   pub fn new(vert_path: &str, frag_path: &str) -> Result<Self> {
@@ -130,15 +130,15 @@ impl Shader {
 
 #[repr(C)]
 pub struct Vertex {
-  pos: [f32; 3],
-  uv: [f32; 2],
+  pub pos: [f32; 3],
+  pub uv: [f32; 2],
 }
 
 pub struct Mesh {
-  vert_arr: u32,
-  vert_buf: u32,
-  idx_buf: u32,
-  len: u32,
+  pub vert_arr: u32,
+  pub vert_buf: u32,
+  pub idx_buf: u32,
+  pub len: u32,
 }
 
 impl Mesh {
@@ -206,7 +206,7 @@ impl Mesh {
   }
 }
 
-pub struct Texture(u32);
+pub struct Texture(pub u32);
 
 impl Texture {
   pub fn new(data: &[u8], width: u32, height: u32) -> Self {
@@ -283,7 +283,7 @@ impl Texture {
 }
 
 #[derive(Copy, Clone)]
-pub struct Framebuffer(u32);
+pub struct Framebuffer(pub u32);
 
 impl Framebuffer {
   pub const DEFAULT: Framebuffer = Self(0);

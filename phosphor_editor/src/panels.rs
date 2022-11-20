@@ -1,16 +1,17 @@
 use phosphor::Result;
 use phosphor::ecs::{World, Name, Stage};
-use phosphor::gfx::{Texture, Mesh, Framebuffer, Renderer};
+use phosphor::gfx::{Texture, Mesh, Framebuffer, Renderer, gl};
 use phosphor::glfw::{Key, Action, CursorMode, MouseButton};
 use phosphor::math::{Vec3, Quat};
 use phosphor_ui::Textures;
-use phosphor_ui::imgui::{Ui, Image, TextureId, WindowFlags};
-use phosphor_3d::{Camera, Transform, SceneDrawOptions, scenerenderer};
+use phosphor_ui::imgui::{Ui, Image, TextureId, WindowFlags, StyleVar};
+use phosphor_3d::{Camera, Transform, Material, SceneDrawOptions, scenerenderer};
 use crate::SelectedEntity;
 
 pub struct Panel {
   pub title: &'static str,
   pub flags: WindowFlags,
+  pub vars: &'static [StyleVar],
   pub open: bool,
   pub render: &'static dyn Fn(&mut World, &Ui),
 }
@@ -27,6 +28,7 @@ struct SceneState {
   size: [f32; 2],
   focused: bool,
   fb: Framebuffer,
+  depth_buf: u32,
   tex: TextureId,
   last_pos: (f32, f32),
   yaw: f32,
@@ -42,25 +44,41 @@ fn scene_init(world: &mut World) -> Result<Panel> {
   world
     .spawn("teapot")
     .insert(Transform::new())
-    .insert(Mesh::load("res/teapot.obj")?);
+    .insert(Mesh::load("res/teapot.obj")?)
+    .insert(Material::Textured(Texture::load("res/brick.jpg")?));
   let fb = Framebuffer::new();
   let tex = Texture::empty();
   fb.bind_tex(&tex);
-  let tex = textures.insert(tex);
-  world.add_resource(SceneState {
-    size: [0.0, 0.0],
-    focused: false,
-    fb,
-    tex,
-    last_pos: (0.0, 0.0),
-    yaw: 1.5,
-    pitch: 0.0,
-  });
+  unsafe {
+    let mut depth_buf = 0;
+    gl::GenRenderbuffers(1, &mut depth_buf);
+    gl::BindRenderbuffer(gl::RENDERBUFFER, depth_buf);
+    gl::RenderbufferStorage(gl::RENDERBUFFER, gl::DEPTH24_STENCIL8, 0, 0);
+    gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
+    gl::FramebufferRenderbuffer(
+      gl::FRAMEBUFFER,
+      gl::DEPTH_STENCIL_ATTACHMENT,
+      gl::RENDERBUFFER,
+      depth_buf,
+    );
+    let tex = textures.insert(tex);
+    world.add_resource(SceneState {
+      size: [0.0, 0.0],
+      focused: false,
+      fb,
+      depth_buf,
+      tex,
+      last_pos: (0.0, 0.0),
+      yaw: 1.5,
+      pitch: 0.0,
+    });
+  }
   scenerenderer(world)?;
   world.add_system(Stage::PreDraw, &scene_predraw);
   Ok(Panel {
     title: "Scene",
     flags: WindowFlags::NO_SCROLLBAR | WindowFlags::NO_SCROLL_WITH_MOUSE,
+    vars: &[StyleVar::WindowPadding([0.0, 0.0])],
     open: true,
     render: &scene_render,
   })
@@ -109,6 +127,8 @@ fn scene_predraw(world: &mut World) -> Result {
     if renderer.window.get_key(Key::D) == Action::Press {
       cam_t.position += right;
     }
+  } else {
+    renderer.window.set_cursor_mode(CursorMode::Normal);
   }
   world.add_resource(SceneDrawOptions {
     fb: s.fb,
@@ -119,26 +139,43 @@ fn scene_predraw(world: &mut World) -> Result {
 
 fn scene_render(world: &mut World, ui: &Ui) {
   let s = world.get_resource::<SceneState>().unwrap();
+  let selected = world.get_resource::<SelectedEntity>().unwrap();
   s.size = ui.window_size();
   s.focused = ui.is_window_focused();
   Image::new(s.tex, s.size)
     .uv0([0.0, 1.0])
     .uv1([1.0, 0.0])
     .build(&ui);
-  ui.set_cursor_pos([32.0, 48.0]);
-  ui.text(format!("{}/{}", s.yaw, s.pitch));
+  ui.set_cursor_pos([16.0, 32.0]);
+  match selected.0 {
+    Some(e) => {
+      let (e, n) = world.get_id::<Name>(e).unwrap();
+      ui.text(format!("{}({})", n.0, e.id));
+    }
+    None => ui.text("No entity selected."),
+  };
   let tex = world
     .get_resource::<Textures>()
     .unwrap()
     .get(s.tex)
     .unwrap();
   tex.resize(s.size[0] as _, s.size[1] as _);
+  unsafe {
+    gl::BindRenderbuffer(gl::RENDERBUFFER, s.depth_buf);
+    gl::RenderbufferStorage(
+      gl::RENDERBUFFER,
+      gl::DEPTH24_STENCIL8,
+      s.size[0] as _,
+      s.size[1] as _,
+    );
+  }
 }
 
 fn outline_init() -> Panel {
   Panel {
     title: "Outline",
     flags: WindowFlags::empty(),
+    vars: &[],
     open: true,
     render: &outline_render,
   }
@@ -163,6 +200,7 @@ fn inspector_init() -> Panel {
   Panel {
     title: "Inspector",
     flags: WindowFlags::empty(),
+    vars: &[],
     open: true,
     render: &inspector_render,
   }
