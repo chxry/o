@@ -28,7 +28,6 @@ struct SceneState {
   size: [f32; 2],
   focused: bool,
   fb: Framebuffer,
-  depth_buf: u32,
   tex: TextureId,
   last_pos: (f32, f32),
   yaw: f32,
@@ -49,30 +48,16 @@ fn scene_init(world: &mut World) -> Result<Panel> {
   let fb = Framebuffer::new();
   let tex = Texture::empty();
   fb.bind_tex(&tex);
-  unsafe {
-    let mut depth_buf = 0;
-    gl::GenRenderbuffers(1, &mut depth_buf);
-    gl::BindRenderbuffer(gl::RENDERBUFFER, depth_buf);
-    gl::RenderbufferStorage(gl::RENDERBUFFER, gl::DEPTH24_STENCIL8, 0, 0);
-    gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
-    gl::FramebufferRenderbuffer(
-      gl::FRAMEBUFFER,
-      gl::DEPTH_STENCIL_ATTACHMENT,
-      gl::RENDERBUFFER,
-      depth_buf,
-    );
-    let tex = textures.insert(tex);
-    world.add_resource(SceneState {
-      size: [0.0, 0.0],
-      focused: false,
-      fb,
-      depth_buf,
-      tex,
-      last_pos: (0.0, 0.0),
-      yaw: 1.5,
-      pitch: 0.0,
-    });
-  }
+  let tex = textures.insert(tex);
+  world.add_resource(SceneState {
+    size: [0.0, 0.0],
+    focused: false,
+    fb,
+    tex,
+    last_pos: (0.0, 0.0),
+    yaw: 1.5,
+    pitch: 0.0,
+  });
   scenerenderer(world)?;
   world.add_system(Stage::PreDraw, &scene_predraw);
   Ok(Panel {
@@ -160,15 +145,7 @@ fn scene_render(world: &mut World, ui: &Ui) {
     .get(s.tex)
     .unwrap();
   tex.resize(s.size[0] as _, s.size[1] as _);
-  unsafe {
-    gl::BindRenderbuffer(gl::RENDERBUFFER, s.depth_buf);
-    gl::RenderbufferStorage(
-      gl::RENDERBUFFER,
-      gl::DEPTH24_STENCIL8,
-      s.size[0] as _,
-      s.size[1] as _,
-    );
-  }
+  s.fb.resize(s.size[0] as _, s.size[1] as _);
 }
 
 fn outline_init() -> Panel {

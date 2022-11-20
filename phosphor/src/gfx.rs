@@ -283,22 +283,36 @@ impl Texture {
 }
 
 #[derive(Copy, Clone)]
-pub struct Framebuffer(pub u32);
+pub struct Framebuffer {
+  pub fb: u32,
+  pub rb: u32,
+}
 
 impl Framebuffer {
-  pub const DEFAULT: Framebuffer = Self(0);
+  pub const DEFAULT: Framebuffer = Self { fb: 0, rb: 0 };
 
   pub fn new() -> Self {
     unsafe {
       let mut fb = 0;
       gl::GenFramebuffers(1, &mut fb);
-      Self(fb)
+      gl::BindFramebuffer(gl::FRAMEBUFFER, fb);
+      let mut rb = 0;
+      gl::GenRenderbuffers(1, &mut rb);
+      gl::BindRenderbuffer(gl::RENDERBUFFER, rb);
+      gl::RenderbufferStorage(gl::RENDERBUFFER, gl::DEPTH24_STENCIL8, 0, 0);
+      gl::FramebufferRenderbuffer(
+        gl::FRAMEBUFFER,
+        gl::DEPTH_STENCIL_ATTACHMENT,
+        gl::RENDERBUFFER,
+        rb,
+      );
+      Self { fb, rb }
     }
   }
 
   pub fn bind(&self) {
     unsafe {
-      gl::BindFramebuffer(gl::FRAMEBUFFER, self.0);
+      gl::BindFramebuffer(gl::FRAMEBUFFER, self.fb);
     }
   }
 
@@ -312,6 +326,13 @@ impl Framebuffer {
         tex.0,
         0,
       );
+    }
+  }
+
+  pub fn resize(&self, width: i32, height: i32) {
+    unsafe {
+      gl::BindRenderbuffer(gl::RENDERBUFFER, self.rb);
+      gl::RenderbufferStorage(gl::RENDERBUFFER, gl::DEPTH24_STENCIL8, width, height);
     }
   }
 }
