@@ -1,6 +1,6 @@
 use std::{fs, path};
 use std::time::Instant;
-use imgui::{StyleColor, ConfigFlags, MouseCursor, BackendFlags, Key};
+use imgui::{StyleColor, ConfigFlags, MouseCursor, BackendFlags, Key, FontConfig, FontGlyphRanges, sys};
 use phosphor::glfw::{
   Cursor, StandardCursor, CursorMode, WindowEvent, Action, Modifiers, MouseButton, Key as GlfwKey,
 };
@@ -17,12 +17,14 @@ pub type Textures = imgui::Textures<Texture>;
 pub struct UiRendererOptions {
   pub docking: bool,
   pub ini_path: Option<&'static str>,
+  pub fonts: &'static [&'static [(&'static str, f32, Option<&'static [u32]>)]],
 }
 
 impl UiRendererOptions {
   const DEFAULT: Self = Self {
     docking: false,
     ini_path: None,
+    fonts: &[&[("res/roboto.ttf", 16.0, None)]],
   };
 }
 
@@ -78,11 +80,21 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
   io[Key::Z] = GlfwKey::Z as _;
 
   let mut fonts = imgui.fonts();
-  fonts.add_font(&[imgui::FontSource::TtfData {
-    data: &fs::read("res/roboto.ttf")?,
-    size_pixels: 16.0,
-    config: None,
-  }]);
+  for font in options.fonts {
+    fonts.add_font(
+      &font
+        .iter()
+        .map(|f| imgui::FontSource::TtfData {
+          data: Box::leak(fs::read(f.0).unwrap().into_boxed_slice()),
+          size_pixels: f.1,
+          config: f.2.map(|g| FontConfig {
+            glyph_ranges: FontGlyphRanges::from_slice(g),
+            ..FontConfig::default()
+          }),
+        })
+        .collect::<Vec<_>>(),
+    );
+  }
   let font_tex = fonts.build_rgba32_texture();
   let mut textures = imgui::Textures::new();
   fonts.tex_id = textures.insert(Texture::new(font_tex.data, font_tex.width, font_tex.height));
@@ -242,7 +254,7 @@ fn uirenderer_predraw(world: &mut World) -> Result<()> {
   };
   if options.docking {
     unsafe {
-      imgui::sys::igDockSpaceOverViewport(imgui::sys::igGetMainViewport(), 0, std::ptr::null());
+      sys::igDockSpaceOverViewport(imgui::sys::igGetMainViewport(), 0, std::ptr::null());
     }
   }
   world.add_resource::<imgui::Ui>(unsafe { (ui as *const imgui::Ui).read() });
@@ -333,4 +345,10 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
     }
   }
   Ok(())
+}
+
+pub fn hover_tooltip(ui: &imgui::Ui, text: &'static str) {
+  if ui.is_item_hovered() {
+    ui.tooltip_text(text);
+  }
 }

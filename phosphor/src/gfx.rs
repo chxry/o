@@ -14,6 +14,8 @@ pub struct Renderer {
   pub glfw: glfw::Glfw,
   pub window: glfw::Window,
   pub events: Receiver<(f64, WindowEvent)>,
+  pub version: &'static str,
+  pub renderer: &'static str,
 }
 
 impl Renderer {
@@ -44,12 +46,14 @@ impl Renderer {
       let version = CStr::from_ptr(gl::GetString(gl::VERSION) as _).to_str()?;
       let renderer = CStr::from_ptr(gl::GetString(gl::RENDERER) as _).to_str()?;
       info!("Created OpenGL {} renderer on {}.", version, renderer);
+      Ok(Self {
+        glfw,
+        window,
+        events,
+        version,
+        renderer,
+      })
     }
-    Ok(Self {
-      glfw,
-      window,
-      events,
-    })
   }
 
   pub fn resize(&self, w: i32, h: i32) {

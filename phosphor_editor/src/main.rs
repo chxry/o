@@ -15,6 +15,13 @@ fn main() -> Result<()> {
     .add_resource(UiRendererOptions {
       docking: true,
       ini_path: Some("phosphor_editor/ui.ini"),
+      fonts: &[
+        &[
+          ("res/roboto.ttf", 16.0, None),
+          ("res/materialicons.ttf", 13.0, Some(&[0xe000, 0x10fffd, 0])),
+        ],
+        &[("res/helvetica-bold.ttf", 36.0, None)],
+      ],
     })
     .add_resource(SelectedEntity(None))
     .add_system(Stage::Start, &uirenderer)
@@ -27,6 +34,7 @@ fn draw_ui(world: &mut World) -> Result<()> {
   let ui = world.get_resource::<Ui>().unwrap();
   let panels = world.get_resource::<Vec<Panel>>().unwrap();
   ui.main_menu_bar(|| {
+    ui.menu("File", || {});
     ui.menu("View", || {
       for panel in panels.iter_mut() {
         ui.menu_item_config(panel.title)
