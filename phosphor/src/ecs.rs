@@ -1,5 +1,7 @@
-use std::collections::HashMap;
-use std::any::{Any, TypeId};
+use std::collections::{HashMap, BTreeMap};
+use std::any::{Any, TypeId, type_name};
+use std::hash::{Hash, Hasher};
+use std::cmp::{PartialEq, PartialOrd, Ordering};
 use glfw::WindowEvent;
 use log::error;
 use crate::{Result, HashMapExt, mutate};
@@ -15,9 +17,48 @@ pub enum Stage {
   PostDraw,
 }
 
+#[derive(Clone, Copy, Eq)]
+pub struct TypeIdNamed {
+  pub id: TypeId,
+  pub name: &'static str,
+}
+
+impl TypeIdNamed {
+  pub fn of<T: Any>() -> Self {
+    Self {
+      id: TypeId::of::<T>(),
+      name: type_name::<T>(),
+    }
+  }
+}
+
+impl Hash for TypeIdNamed {
+  fn hash<H: Hasher>(&self, h: &mut H) {
+    self.id.hash(h)
+  }
+}
+
+impl PartialEq for TypeIdNamed {
+  fn eq(&self, other: &Self) -> bool {
+    self.id == other.id
+  }
+}
+
+impl PartialOrd for TypeIdNamed {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
+  }
+}
+
+impl Ord for TypeIdNamed {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.id.cmp(&other.id)
+  }
+}
+
 pub struct World {
-  components: HashMap<TypeId, Vec<(usize, Box<dyn Any>)>>,
-  resources: HashMap<TypeId, Box<dyn Any>>,
+  components: HashMap<TypeIdNamed, Vec<(usize, Box<dyn Any>)>>,
+  resources: HashMap<TypeIdNamed, Box<dyn Any>>,
   systems: HashMap<Stage, Vec<System>>,
   event_handlers: Vec<EventHandler>,
 }
@@ -45,7 +86,7 @@ impl World {
   }
 
   pub fn query<T: Any>(&self) -> Vec<(Entity, &mut T)> {
-    match self.components.get(&TypeId::of::<T>()) {
+    match self.components.get(&TypeIdNamed::of::<T>()) {
       Some(v) => v
         .iter()
         .map(|(e, b)| {
@@ -63,7 +104,7 @@ impl World {
   }
 
   pub fn get_id<T: Any>(&self, id: usize) -> Option<(Entity, &mut T)> {
-    match self.components.get(&TypeId::of::<T>()) {
+    match self.components.get(&TypeIdNamed::of::<T>()) {
       Some(v) => v.iter().find(|(e, _)| *e == id).map(|s| {
         (
           Entity {
@@ -77,6 +118,21 @@ impl World {
     }
   }
 
+  pub fn get_all(&self, id: usize) -> BTreeMap<TypeIdNamed, Vec<&mut Box<dyn Any>>> {
+    let mut components = BTreeMap::new();
+    for (t, v) in self.components.iter() {
+      let v: Vec<&mut Box<dyn Any>> = v
+        .iter()
+        .filter(|i| i.0 == id)
+        .map(|c| mutate(&c.1))
+        .collect();
+      if !v.is_empty() {
+        components.insert(*t, v);
+      }
+    }
+    components
+  }
+
   pub fn get_name(&self, name: &'static str) -> Option<Entity> {
     self
       .query::<Name>()
@@ -86,11 +142,13 @@ impl World {
   }
 
   pub fn add_resource<T: Any>(&mut self, resource: T) {
-    self.resources.insert(TypeId::of::<T>(), Box::new(resource));
+    self
+      .resources
+      .insert(TypeIdNamed::of::<T>(), Box::new(resource));
   }
 
   pub fn get_resource<T: Any>(&self) -> Option<&mut T> {
-    match self.resources.get(&TypeId::of::<T>()) {
+    match self.resources.get(&TypeIdNamed::of::<T>()) {
       Some(r) => Some(mutate(r.downcast_ref().unwrap())),
       None => None,
     }
@@ -99,7 +157,7 @@ impl World {
   pub fn take_resource<T: Any>(&mut self) -> Option<T> {
     self
       .resources
-      .remove(&TypeId::of::<T>())
+      .remove(&TypeIdNamed::of::<T>())
       .map(|r| *r.downcast().unwrap())
   }
 
@@ -142,7 +200,7 @@ impl Entity<'_> {
     self
       .world
       .components
-      .push_or_insert(TypeId::of::<T>(), (self.id, Box::new(component)));
+      .push_or_insert(TypeIdNamed::of::<T>(), (self.id, Box::new(component)));
     self
   }
 
