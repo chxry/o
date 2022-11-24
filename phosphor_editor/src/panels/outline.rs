@@ -5,7 +5,7 @@ use crate::panels::Panel;
 
 pub fn init() -> Panel {
   Panel {
-    title: "\u{e8d2} Outline",
+    title: "\u{e1e0} Outline",
     flags: WindowFlags::empty(),
     vars: &[],
     open: true,
@@ -25,5 +25,6 @@ fn render(world: &mut World, ui: &Ui) {
       *selected = SelectedEntity(Some(e.id));
     }
   }
-  ui.button_with_size("\u{e145} Add Entity", [w, 0.0]);
+  ui.separator();
+  ui.button_with_size("\u{2b} Add Entity", [w, 0.0]);
 }

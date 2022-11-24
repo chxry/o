@@ -1,10 +1,9 @@
 use std::collections::{HashMap, BTreeMap};
-use std::any::{Any, TypeId, type_name};
-use std::hash::{Hash, Hasher};
-use std::cmp::{PartialEq, PartialOrd, Ordering};
+use std::any::Any;
+use std::hash::Hash;
 use glfw::WindowEvent;
 use log::error;
-use crate::{Result, HashMapExt, mutate};
+use crate::{Result, HashMapExt, TypeIdNamed, mutate};
 
 pub type System = &'static dyn Fn(&mut World) -> Result;
 pub type EventHandler = &'static dyn Fn(&mut World, &WindowEvent) -> Result<()>;
@@ -15,45 +14,6 @@ pub enum Stage {
   PreDraw,
   Draw,
   PostDraw,
-}
-
-#[derive(Clone, Copy, Eq)]
-pub struct TypeIdNamed {
-  pub id: TypeId,
-  pub name: &'static str,
-}
-
-impl TypeIdNamed {
-  pub fn of<T: Any>() -> Self {
-    Self {
-      id: TypeId::of::<T>(),
-      name: type_name::<T>(),
-    }
-  }
-}
-
-impl Hash for TypeIdNamed {
-  fn hash<H: Hasher>(&self, h: &mut H) {
-    self.id.hash(h)
-  }
-}
-
-impl PartialEq for TypeIdNamed {
-  fn eq(&self, other: &Self) -> bool {
-    self.id == other.id
-  }
-}
-
-impl PartialOrd for TypeIdNamed {
-  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-    Some(self.cmp(other))
-  }
-}
-
-impl Ord for TypeIdNamed {
-  fn cmp(&self, other: &Self) -> Ordering {
-    self.id.cmp(&other.id)
-  }
 }
 
 pub struct World {

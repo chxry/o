@@ -1,10 +1,11 @@
 use phosphor::ecs::World;
+use phosphor::assets::Assets;
 use phosphor_ui::imgui::{Ui, WindowFlags};
 use crate::panels::Panel;
 
 pub fn init() -> Panel {
   Panel {
-    title: "\u{e2c7} Assets",
+    title: "\u{f660} Assets",
     flags: WindowFlags::empty(),
     vars: &[],
     open: true,
@@ -12,4 +13,13 @@ pub fn init() -> Panel {
   }
 }
 
-fn render(_: &mut World, _: &Ui) {}
+fn render(world: &mut World, ui: &Ui) {
+  let assets = world.get_resource::<Assets>().unwrap();
+  for (t, v) in assets.handles.iter() {
+    ui.text(t.name);
+    for a in v {
+      ui.same_line();
+      ui.text(a.name.clone());
+    }
+  }
+}

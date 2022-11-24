@@ -1,9 +1,9 @@
 use phosphor::Result;
 use phosphor::ecs::{World, Name, Stage};
-use phosphor::gfx::{Texture, Mesh, Framebuffer, Renderer};
+use phosphor::gfx::{Texture, Framebuffer, Renderer};
 use phosphor::glfw::{Key, Action, CursorMode, MouseButton};
 use phosphor::math::{Vec3, Quat};
-use phosphor_ui::Textures;
+use phosphor::assets::Assets;
 use phosphor_ui::imgui::{Ui, Image, TextureId, WindowFlags, StyleVar};
 use phosphor_3d::{Camera, Transform, Material, SceneDrawOptions, scenerenderer};
 use crate::SelectedEntity;
@@ -13,27 +13,31 @@ struct SceneState {
   size: [f32; 2],
   focused: bool,
   fb: Framebuffer,
-  tex: TextureId,
+  tex: Texture,
   last_pos: (f32, f32),
   yaw: f32,
   pitch: f32,
 }
 
 pub fn init(world: &mut World) -> Result<Panel> {
-  let textures = world.get_resource::<Textures>().unwrap();
+  let assets = world.get_resource::<Assets>().unwrap();
   world
     .spawn("cam")
     .insert(Transform::new().pos(Vec3::new(0.0, 1.0, -10.0)))
-    .insert(Camera::new(0.8, 0.1..100.0));
+    .insert(Camera::new(80.0, [0.1, 100.0]));
   world
     .spawn("teapot")
     .insert(Transform::new())
-    .insert(Mesh::load("res/teapot.obj")?)
-    .insert(Material::Textured(Texture::load("res/brick.jpg")?));
+    .insert(assets.load_mesh("res/teapot.obj")?)
+    .insert(Material::texture(assets.load_tex("res/brick.jpg")?));
+  world
+    .spawn("cylinder")
+    .insert(Transform::new().pos(Vec3::new(5.0, 2.0, 0.0)))
+    .insert(assets.load_mesh("res/cylinder.obj")?)
+    .insert(Material::color(Vec3::X));
   let fb = Framebuffer::new();
   let tex = Texture::empty();
   fb.bind_tex(&tex);
-  let tex = textures.insert(tex);
   world.add_resource(SceneState {
     size: [0.0, 0.0],
     focused: false,
@@ -46,7 +50,7 @@ pub fn init(world: &mut World) -> Result<Panel> {
   scenerenderer(world)?;
   world.add_system(Stage::PreDraw, &predraw);
   Ok(Panel {
-    title: "\u{e40b} Scene",
+    title: "\u{e1c3} Scene",
     flags: WindowFlags::NO_SCROLLBAR | WindowFlags::NO_SCROLL_WITH_MOUSE,
     vars: &[StyleVar::WindowPadding([0.0, 0.0])],
     open: true,
@@ -112,7 +116,7 @@ fn render(world: &mut World, ui: &Ui) {
   let selected = world.get_resource::<SelectedEntity>().unwrap();
   s.size = ui.window_size();
   s.focused = ui.is_window_focused();
-  Image::new(s.tex, s.size)
+  Image::new(TextureId::new(s.tex.0 as _), s.size)
     .uv0([0.0, 1.0])
     .uv1([1.0, 0.0])
     .build(&ui);
@@ -124,11 +128,8 @@ fn render(world: &mut World, ui: &Ui) {
     }
     None => ui.text("No entity selected."),
   };
-  let tex = world
-    .get_resource::<Textures>()
-    .unwrap()
-    .get(s.tex)
-    .unwrap();
-  tex.resize(s.size[0] as _, s.size[1] as _);
+  ui.set_cursor_pos([16.0, 52.0]);
+  ui.text(format!("{:.1}fps", ui.io().framerate));
+  s.tex.resize(s.size[0] as _, s.size[1] as _);
   s.fb.resize(s.size[0] as _, s.size[1] as _);
 }

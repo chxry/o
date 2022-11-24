@@ -9,6 +9,8 @@ use crate::panels::{Panel, setup_panels};
 
 pub struct SelectedEntity(Option<usize>);
 
+const TEXT: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
+
 fn main() -> Result<()> {
   env_logger::builder().filter_level(LevelFilter::Info).init();
   Engine::new()
@@ -18,9 +20,9 @@ fn main() -> Result<()> {
       fonts: &[
         &[
           ("res/roboto.ttf", 16.0, None),
-          ("res/materialicons.ttf", 13.0, Some(&[0xe000, 0x10fffd, 0])),
+          ("res/fontawesome.ttf", 14.0, Some(&[0xe005, 0xf8ff, 0])),
         ],
-        &[("res/helvetica-bold.ttf", 36.0, None)],
+        &[("res/helvetica-bold.ttf", 40.0, None)],
       ],
     })
     .add_resource(SelectedEntity(None))
@@ -41,6 +43,10 @@ fn draw_ui(world: &mut World) -> Result<()> {
           .build_with_ref(&mut panel.open);
       }
     });
+    let [w, _] = ui.window_size();
+    let [tx, _] = ui.calc_text_size(TEXT);
+    ui.same_line_with_pos(w - tx - 16.0);
+    ui.text_disabled(TEXT);
   });
   for panel in panels {
     if panel.open {

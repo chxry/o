@@ -1,10 +1,8 @@
-use std::fs::{self, File};
-use std::io::BufReader;
+use std::fs;
 use std::ffi::{CStr, CString};
 use std::sync::mpsc::Receiver;
 use glfw::{Context, WindowEvent};
 use glam::{Mat4, Vec3};
-use obj::{Obj, TexturedVertex};
 use log::info;
 use crate::Result;
 
@@ -56,10 +54,10 @@ impl Renderer {
     }
   }
 
-  pub fn resize(&self, w: i32, h: i32) {
+  pub fn resize(&self, w: u32, h: u32) {
     unsafe {
-      gl::Viewport(0, 0, w, h);
-      gl::Scissor(0, 0, w, h);
+      gl::Viewport(0, 0, w as _, h as _);
+      gl::Scissor(0, 0, w as _, h as _);
     }
   }
 
@@ -182,21 +180,6 @@ impl Mesh {
     }
   }
 
-  pub fn load(path: &str) -> Result<Self> {
-    let obj: Obj<TexturedVertex> = obj::load_obj(BufReader::new(File::open(path)?))?;
-    Ok(Self::new(
-      &obj
-        .vertices
-        .iter()
-        .map(|v| Vertex {
-          pos: v.position,
-          uv: [v.texture[0], v.texture[1]],
-        })
-        .collect::<Vec<_>>(),
-      &obj.indices,
-    ))
-  }
-
   pub fn draw(&self) {
     unsafe {
       gl::BindVertexArray(self.vert_arr);
@@ -255,11 +238,6 @@ impl Texture {
       );
       Self(tex)
     }
-  }
-
-  pub fn load(path: &str) -> Result<Self> {
-    let img = image::open(path)?.to_rgba8();
-    Ok(Self::new(img.as_raw(), img.width(), img.height()))
   }
 
   pub fn bind(&self) {
@@ -333,10 +311,15 @@ impl Framebuffer {
     }
   }
 
-  pub fn resize(&self, width: i32, height: i32) {
+  pub fn resize(&self, width: u32, height: u32) {
     unsafe {
       gl::BindRenderbuffer(gl::RENDERBUFFER, self.rb);
-      gl::RenderbufferStorage(gl::RENDERBUFFER, gl::DEPTH24_STENCIL8, width, height);
+      gl::RenderbufferStorage(
+        gl::RENDERBUFFER,
+        gl::DEPTH24_STENCIL8,
+        width as _,
+        height as _,
+      );
     }
   }
 }

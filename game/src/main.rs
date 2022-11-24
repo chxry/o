@@ -5,9 +5,9 @@ use phosphor_ui::{
   imgui::{Ui, Drag},
   uirenderer,
 };
-use phosphor::gfx::{Mesh, Texture};
 use phosphor::log::LevelFilter;
 use phosphor::math::Vec3;
+use phosphor::assets::Assets;
 
 fn main() -> Result {
   env_logger::builder().filter_level(LevelFilter::Info).init();
@@ -20,6 +20,7 @@ fn main() -> Result {
 }
 
 fn start(world: &mut World) -> Result {
+  let assets = world.get_resource::<Assets>().unwrap();
   world
     .spawn("cam")
     .insert(
@@ -27,12 +28,12 @@ fn start(world: &mut World) -> Result {
         .pos(Vec3::new(0.0, 1.0, -10.0))
         .rot_euler(Vec3::new(0.0, 0.0, 1.5)),
     )
-    .insert(Camera::new(0.8, 0.1..100.0));
+    .insert(Camera::new(80.0, [0.1, 100.0]));
   world
     .spawn("teapot")
     .insert(Transform::new())
-    .insert(Mesh::load("res/teapot.obj")?)
-    .insert(Material::Textured(Texture::load("res/brick.jpg")?));
+    .insert(assets.load_mesh("res/teapot.obj")?)
+    .insert(Material::texture(assets.load_tex("res/brick.jpg")?));
   Ok(())
 }
 

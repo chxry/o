@@ -1,6 +1,9 @@
 use std::{fs, path};
 use std::time::Instant;
-use imgui::{StyleColor, ConfigFlags, MouseCursor, BackendFlags, Key, FontConfig, FontGlyphRanges, sys};
+use imgui::{
+  StyleColor, ConfigFlags, MouseCursor, BackendFlags, Key, FontConfig, FontGlyphRanges, TextureId,
+  sys,
+};
 use phosphor::glfw::{
   Cursor, StandardCursor, CursorMode, WindowEvent, Action, Modifiers, MouseButton, Key as GlfwKey,
 };
@@ -8,11 +11,9 @@ use phosphor::Result;
 use phosphor::gfx::{Renderer, Shader, Texture, gl};
 use phosphor::ecs::{World, Stage};
 use phosphor::math::Mat4;
-use phosphor::log::{info, warn};
+use phosphor::log::info;
 
 pub use imgui;
-
-pub type Textures = imgui::Textures<Texture>;
 
 pub struct UiRendererOptions {
   pub docking: bool,
@@ -45,11 +46,11 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
     Some(o) => o,
     None => &UiRendererOptions::DEFAULT,
   };
-  if options.docking {
-    imgui.io_mut().config_flags |= ConfigFlags::DOCKING_ENABLE;
-  }
   imgui.set_ini_filename(options.ini_path.map(|s| path::PathBuf::from(s)));
   let io = imgui.io_mut();
+  if options.docking {
+    io.config_flags |= ConfigFlags::DOCKING_ENABLE;
+  }
   let (w, h) = renderer.window.get_size();
   let (scale_w, scale_h) = renderer.window.get_content_scale();
   io.display_size = [w as _, h as _];
@@ -96,9 +97,8 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
     );
   }
   let font_tex = fonts.build_rgba32_texture();
-  let mut textures = imgui::Textures::new();
-  fonts.tex_id = textures.insert(Texture::new(font_tex.data, font_tex.width, font_tex.height));
-  drop(fonts);
+  fonts.tex_id =
+    TextureId::new(Texture::new(font_tex.data, font_tex.width, font_tex.height).0 as _);
   let style = imgui.style_mut();
   style[StyleColor::Text] = [1.00, 1.00, 1.00, 1.00];
   style[StyleColor::TextDisabled] = [0.50, 0.50, 0.50, 1.00];
@@ -185,7 +185,6 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
     idx_buf,
     last_frame: Instant::now(),
   });
-  world.add_resource(textures);
   world.add_event_handler(&uirenderer_event);
   world.add_system(Stage::PreDraw, &uirenderer_predraw);
   world.add_system(Stage::PostDraw, &uirenderer_draw);
@@ -264,7 +263,6 @@ fn uirenderer_predraw(world: &mut World) -> Result<()> {
 fn uirenderer_draw(world: &mut World) -> Result<()> {
   if let Some(ui) = world.take_resource::<imgui::Ui>() {
     let renderer = world.get_resource::<Renderer>().unwrap();
-    let textures = world.get_resource::<Textures>().unwrap();
     let r = world.get_resource::<UiRenderer>().unwrap();
     unsafe {
       gl::Disable(gl::DEPTH_TEST);
@@ -322,10 +320,7 @@ fn uirenderer_draw(world: &mut World) -> Result<()> {
         );
         for cmd in draw_list.commands() {
           if let imgui::DrawCmd::Elements { count, cmd_params } = cmd {
-            match textures.get(cmd_params.texture_id) {
-              Some(tex) => tex.bind(),
-              None => warn!("Texture {} does not exist.", cmd_params.texture_id.id()),
-            };
+            Texture(cmd_params.texture_id.id() as _).bind();
             gl::Scissor(
               (cmd_params.clip_rect[0] * scale_w) as _,
               (h * scale_h - cmd_params.clip_rect[3] * scale_h) as _,

@@ -1,8 +1,11 @@
-use std::ops::Range;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::any::Any;
 use phosphor::Result;
 use phosphor::gfx::{Renderer, Shader, Texture, Mesh, Framebuffer};
 use phosphor::ecs::{World, Stage};
 use phosphor::math::{Vec3, Quat, EulerRot, Mat4};
+use phosphor::assets::Handle;
 use phosphor::log::warn;
 
 pub struct Transform {
@@ -47,30 +50,82 @@ impl Transform {
 
 pub struct Camera {
   pub fov: f32,
-  pub clip: Range<f32>,
+  pub clip: [f32; 2],
 }
 
 impl Camera {
-  pub fn new(fov: f32, clip: Range<f32>) -> Self {
+  pub fn new(fov: f32, clip: [f32; 2]) -> Self {
     Self { fov, clip }
   }
 }
 
-pub enum Material {
-  Textured(Texture),
-  Color(Vec3),
+pub struct Material {
+  pub id: usize,
+  pub data: Box<dyn Any>,
 }
 
-struct SceneRenderer {
-  texture_shader: Shader,
-  color_shader: Shader,
+impl Hash for Material {
+  fn hash<H: Hasher>(&self, h: &mut H) {
+    self.id.hash(h)
+  }
+}
+
+impl PartialEq for Material {
+  fn eq(&self, other: &Self) -> bool {
+    self.id == other.id
+  }
+}
+
+impl Eq for Material {}
+
+impl Material {
+  pub fn color(col: Vec3) -> Self {
+    Self {
+      id: 0,
+      data: Box::new(col),
+    }
+  }
+
+  pub fn texture(tex: Handle<Texture>) -> Self {
+    Self {
+      id: 1,
+      data: Box::new(tex),
+    }
+  }
+}
+
+struct MaterialShader {
+  shader: Shader,
+  bind: &'static dyn Fn(&Shader, &Box<dyn Any>),
+}
+
+fn material_color(shader: &Shader, data: &Box<dyn Any>) {
+  let col: &Vec3 = data.downcast_ref().unwrap();
+  shader.set_vec3("u_color", col);
+}
+
+fn material_texture(_: &Shader, data: &Box<dyn Any>) {
+  let tex: &Handle<Texture> = data.downcast_ref().unwrap();
+  tex.bind();
 }
 
 pub fn scenerenderer(world: &mut World) -> Result<()> {
-  world.add_resource(SceneRenderer {
-    texture_shader: Shader::new("res/base.vert", "res/texture.frag")?,
-    color_shader: Shader::new("res/base.vert", "res/color.frag")?,
-  });
+  world.add_resource(HashMap::from([
+    (
+      0usize,
+      MaterialShader {
+        shader: Shader::new("res/base.vert", "res/color.frag")?,
+        bind: &material_color,
+      },
+    ),
+    (
+      1,
+      MaterialShader {
+        shader: Shader::new("res/base.vert", "res/texture.frag")?,
+        bind: &material_texture,
+      },
+    ),
+  ]));
   world.add_system(Stage::Draw, &scenerenderer_draw);
   Ok(())
 }
@@ -94,38 +149,30 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
             o.size[0] / o.size[1]
           }
           None => {
-            renderer.resize(w, h);
+            renderer.resize(w as _, h as _);
             renderer.clear();
             w as f32 / h as f32
           }
         };
-        let r = world.get_resource::<SceneRenderer>().unwrap();
+        let mats = world
+          .get_resource::<HashMap<usize, MaterialShader>>()
+          .unwrap();
 
         let view = Mat4::look_to_rh(cam_t.position, cam_t.rotation.to_scaled_axis(), Vec3::Y);
-        let projection = Mat4::perspective_rh(cam.fov, aspect, cam.clip.start, cam.clip.end);
+        let projection =
+          Mat4::perspective_rh(cam.fov.to_radians(), aspect, cam.clip[0], cam.clip[1]);
 
-        for (e, mesh) in world.query::<Mesh>() {
+        for (e, mesh) in world.query::<Handle<Mesh>>() {
           match e.get::<Transform>() {
             Some(mesh_t) => {
-              let shader = match e
-                .get::<Material>()
-                .unwrap_or(&mut Material::Color(Vec3::splat(0.75)))
-              {
-                Material::Textured(tex) => {
-                  r.texture_shader.bind();
-                  tex.bind();
-                  &r.texture_shader
-                }
-                Material::Color(col) => {
-                  r.color_shader.bind();
-                  r.color_shader.set_vec3("u_color", col);
-                  &r.color_shader
-                }
-              };
-
-              shader.set_mat4("model", &mesh_t.as_mat4());
-              shader.set_mat4("view", &view);
-              shader.set_mat4("projection", &projection);
+              let d = &mut Material::color(Vec3::X);
+              let mat = e.get::<Material>().unwrap_or(d);
+              let s = mats.get(&mat.id).unwrap();
+              s.shader.bind();
+              s.shader.set_mat4("model", &mesh_t.as_mat4());
+              s.shader.set_mat4("view", &view);
+              s.shader.set_mat4("projection", &projection);
+              (s.bind)(&s.shader, &mat.data);
               mesh.draw();
             }
             None => warn!(
@@ -135,7 +182,7 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
           }
         }
         Framebuffer::DEFAULT.bind();
-        renderer.resize(w, h);
+        renderer.resize(w as _, h as _);
       }
       None => warn!("Scene will not be rendered (Missing camera transform)."),
     },

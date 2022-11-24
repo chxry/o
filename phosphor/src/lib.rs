@@ -1,12 +1,15 @@
 pub mod gfx;
 pub mod ecs;
+pub mod assets;
 
 use std::collections::HashMap;
-use std::hash::Hash;
-use std::any::Any;
+use std::hash::{Hash, Hasher};
+use std::any::{Any, TypeId, type_name};
+use std::cmp::Ordering;
 use glfw::Context;
 use crate::gfx::Renderer;
 use crate::ecs::{World, Stage, System};
+use crate::assets::Assets;
 
 pub use glam as math;
 pub use log;
@@ -36,6 +39,7 @@ impl Engine {
   }
 
   pub fn run(mut self) -> Result<()> {
+    self.world.add_resource(Assets::new());
     self.world.add_resource(Renderer::new()?);
     let renderer = self.world.get_resource::<Renderer>().unwrap();
     self.world.run_system(Stage::Start);
@@ -65,6 +69,45 @@ impl<K: Hash + Eq, V> HashMapExt<K, V> for HashMap<K, Vec<V>> {
         self.insert(key, vec![val]);
       }
     };
+  }
+}
+
+#[derive(Clone, Copy, Eq)]
+pub struct TypeIdNamed {
+  pub id: TypeId,
+  pub name: &'static str,
+}
+
+impl TypeIdNamed {
+  pub fn of<T: Any>() -> Self {
+    Self {
+      id: TypeId::of::<T>(),
+      name: type_name::<T>(),
+    }
+  }
+}
+
+impl Hash for TypeIdNamed {
+  fn hash<H: Hasher>(&self, h: &mut H) {
+    self.id.hash(h)
+  }
+}
+
+impl PartialEq for TypeIdNamed {
+  fn eq(&self, other: &Self) -> bool {
+    self.id == other.id
+  }
+}
+
+impl PartialOrd for TypeIdNamed {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
+  }
+}
+
+impl Ord for TypeIdNamed {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.id.cmp(&other.id)
   }
 }
 
