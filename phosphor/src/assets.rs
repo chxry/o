@@ -7,6 +7,7 @@ use std::io::BufReader;
 use std::fs::File;
 use std::fmt::Display;
 use obj::{Obj, TexturedVertex};
+use image::imageops::flip_vertical_in_place;
 use crate::gfx::{Texture, Mesh, Vertex};
 use crate::{Result, HashMapExt, TypeIdNamed};
 
@@ -29,7 +30,9 @@ impl Assets {
   }
 
   pub fn load_tex<P: AsRef<Path> + Display + Clone>(&mut self, path: P) -> Result<Handle<Texture>> {
-    let img = image::open(path.clone())?.to_rgba8();
+    // check if already inserted and just return that handle
+    let mut img = image::open(path.clone())?.to_rgba8();
+    flip_vertical_in_place(&mut img);
     let h = Handle::new(
       path.to_string(),
       Texture::new(img.as_raw(), img.width(), img.height()),

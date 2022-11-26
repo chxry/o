@@ -55,6 +55,7 @@ pub fn init(world: &mut World) -> Panel {
       MaterialInspector {
         name: "Color",
         render: &material_color,
+        default: &material_color_default,
       },
     ),
     (
@@ -62,6 +63,7 @@ pub fn init(world: &mut World) -> Panel {
       MaterialInspector {
         name: "Texture",
         render: &material_texture,
+        default: &material_texture_default,
       },
     ),
   ]));
@@ -125,6 +127,7 @@ fn inspector_mesh(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
 struct MaterialInspector {
   name: &'static str,
   render: &'static dyn Fn(&Ui, &mut Material, &mut World),
+  default: &'static dyn Fn(&mut World) -> Material,
 }
 
 fn inspector_material(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
@@ -135,8 +138,11 @@ fn inspector_material(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
   let mat_i = mats.get(&mat.id);
   let id = ui.push_id("##");
   if let Some(_) = ui.begin_combo("type", mat_i.map(|m| m.name).unwrap_or("??")) {
-    for m in mats.iter() {
-      ui.selectable(m.1.name);
+    for (t, i) in mats.iter() {
+      if ui.selectable_config(i.name).selected(*t == mat.id).build() {
+        *mat = (i.default)(world);
+        return;
+      }
     }
   }
   match mat_i {
@@ -151,14 +157,29 @@ fn material_color(ui: &Ui, mat: &mut Material, _: &mut World) {
   ui.color_edit3("color", col.as_mut());
 }
 
+fn material_color_default(_: &mut World) -> Material {
+  Material::color(Vec3::splat(0.75))
+}
+
 fn material_texture(ui: &Ui, mat: &mut Material, world: &mut World) {
   let tex: &mut Handle<Texture> = mat.data.downcast_mut().unwrap();
   let assets = world.get_resource::<Assets>().unwrap();
   if let Some(_) = ui.begin_combo("texture", tex.name.clone()) {
     for asset in assets.get::<Texture>() {
-      ui.text(asset.name);
+      if ui
+        .selectable_config(asset.name.clone())
+        .selected(tex.0 == asset.0)
+        .build()
+      {
+        *tex = asset;
+      }
     }
   }
+}
+
+fn material_texture_default(world: &mut World) -> Material {
+  let assets = world.get_resource::<Assets>().unwrap();
+  Material::texture(assets.get::<Texture>()[0].clone())
 }
 
 fn render(world: &mut World, ui: &Ui) {

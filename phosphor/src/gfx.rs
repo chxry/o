@@ -69,6 +69,7 @@ impl Renderer {
   }
 }
 
+#[derive(Copy, Clone)]
 pub struct Shader(pub u32);
 
 impl Shader {
@@ -136,6 +137,7 @@ pub struct Vertex {
   pub uv: [f32; 2],
 }
 
+#[derive(Copy, Clone)]
 pub struct Mesh {
   pub vert_arr: u32,
   pub vert_buf: u32,
@@ -193,6 +195,7 @@ impl Mesh {
   }
 }
 
+#[derive(Copy, Clone)]
 pub struct Texture(pub u32);
 
 impl Texture {

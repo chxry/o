@@ -14,12 +14,12 @@ pub fn init() -> Panel {
 }
 
 fn render(world: &mut World, ui: &Ui) {
-  ui.set_next_item_width(320.0);
   let font = ui.push_font(ui.fonts().fonts()[1]);
-  ui.text("Phosphor");
+  ui.text("\u{f5d3} Phosphor");
   font.pop();
   ui.text("github.com/chxry/phosphor");
-  ui.same_line_with_pos(230.0);
+  let [w, _] = ui.window_size();
+  ui.same_line_with_pos(w - 52.0);
   ui.text(env!("CARGO_PKG_VERSION"));
   ui.separator();
   if let Some(_) = ui.tree_node("System info") {

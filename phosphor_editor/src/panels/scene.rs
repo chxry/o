@@ -35,6 +35,15 @@ pub fn init(world: &mut World) -> Result<Panel> {
     .insert(Transform::new().pos(Vec3::new(5.0, 2.0, 0.0)))
     .insert(assets.load_mesh("res/cylinder.obj")?)
     .insert(Material::color(Vec3::X));
+  world
+    .spawn("garfield")
+    .insert(
+      Transform::new()
+        .pos(Vec3::new(-5.0, 0.0, 0.0))
+        .scale(Vec3::splat(5.0)),
+    )
+    .insert(assets.load_mesh("res/garfield.obj")?)
+    .insert(Material::texture(assets.load_tex("res/garfield.png")?));
   let fb = Framebuffer::new();
   let tex = Texture::empty();
   fb.bind_tex(&tex);
