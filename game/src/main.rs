@@ -1,5 +1,6 @@
 use phosphor::{Engine, Result};
 use phosphor::ecs::{World, Stage};
+use phosphor::gfx::Mesh;
 use phosphor_3d::{Transform, Camera, Material, scenerenderer};
 use phosphor_ui::{
   imgui::{Ui, Drag},
@@ -32,8 +33,8 @@ fn start(world: &mut World) -> Result {
   world
     .spawn("teapot")
     .insert(Transform::new())
-    .insert(assets.load_mesh("res/teapot.obj")?)
-    .insert(Material::texture(assets.load_tex("res/brick.jpg")?));
+    .insert(assets.load::<Mesh>("res/teapot.obj")?)
+    .insert(Material::texture(assets.load("res/brick.jpg")?));
   Ok(())
 }
 

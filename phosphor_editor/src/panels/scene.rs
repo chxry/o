@@ -1,6 +1,6 @@
 use phosphor::Result;
 use phosphor::ecs::{World, Name, Stage};
-use phosphor::gfx::{Texture, Framebuffer, Renderer};
+use phosphor::gfx::{Texture, Mesh, Framebuffer, Renderer};
 use phosphor::glfw::{Key, Action, CursorMode, MouseButton};
 use phosphor::math::{Vec3, Quat};
 use phosphor::assets::Assets;
@@ -28,12 +28,12 @@ pub fn init(world: &mut World) -> Result<Panel> {
   world
     .spawn("teapot")
     .insert(Transform::new())
-    .insert(assets.load_mesh("res/teapot.obj")?)
-    .insert(Material::texture(assets.load_tex("res/brick.jpg")?));
+    .insert(assets.load::<Mesh>("res/teapot.obj")?)
+    .insert(Material::texture(assets.load("res/brick.jpg")?));
   world
     .spawn("cylinder")
     .insert(Transform::new().pos(Vec3::new(5.0, 2.0, 0.0)))
-    .insert(assets.load_mesh("res/cylinder.obj")?)
+    .insert(assets.load::<Mesh>("res/cylinder.obj")?)
     .insert(Material::color(Vec3::X));
   world
     .spawn("garfield")
@@ -42,8 +42,8 @@ pub fn init(world: &mut World) -> Result<Panel> {
         .pos(Vec3::new(-5.0, 0.0, 0.0))
         .scale(Vec3::splat(5.0)),
     )
-    .insert(assets.load_mesh("res/garfield.obj")?)
-    .insert(Material::texture(assets.load_tex("res/garfield.png")?));
+    .insert(assets.load::<Mesh>("res/garfield.obj")?)
+    .insert(Material::texture(assets.load("res/garfield.png")?));
   let fb = Framebuffer::new();
   let tex = Texture::empty();
   fb.bind_tex(&tex);

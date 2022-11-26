@@ -119,9 +119,9 @@ fn inspector_camera(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
     .build_array(ui, &mut cam.clip);
 }
 
-fn inspector_mesh(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
+fn inspector_mesh(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
   let mesh: &mut Handle<Mesh> = t.downcast_mut().unwrap();
-  ui.text(mesh.name.clone()); // share ui with material
+  asset_picker(ui, "mesh", world.get_resource::<Assets>().unwrap(), mesh);
 }
 
 struct MaterialInspector {
@@ -163,18 +163,7 @@ fn material_color_default(_: &mut World) -> Material {
 
 fn material_texture(ui: &Ui, mat: &mut Material, world: &mut World) {
   let tex: &mut Handle<Texture> = mat.data.downcast_mut().unwrap();
-  let assets = world.get_resource::<Assets>().unwrap();
-  if let Some(_) = ui.begin_combo("texture", tex.name.clone()) {
-    for asset in assets.get::<Texture>() {
-      if ui
-        .selectable_config(asset.name.clone())
-        .selected(tex.0 == asset.0)
-        .build()
-      {
-        *tex = asset;
-      }
-    }
-  }
+  asset_picker(ui, "texture", world.get_resource::<Assets>().unwrap(), tex);
 }
 
 fn material_texture_default(world: &mut World) -> Material {
@@ -211,5 +200,19 @@ fn render(world: &mut World, ui: &Ui) {
       ui.button_with_size("\u{2b} Add Component", [w, 0.0]);
     }
     None => ui.text("\u{f071} No entity selected."),
+  }
+}
+
+fn asset_picker<T: Any>(ui: &Ui, label: &str, assets: &mut Assets, handle: &mut Handle<T>) {
+  if let Some(_) = ui.begin_combo(label, handle.name.clone()) {
+    for asset in assets.get::<T>() {
+      if ui
+        .selectable_config(asset.name.clone())
+        .selected(handle.name == asset.name) // not great
+        .build()
+      {
+        *handle = asset;
+      }
+    }
   }
 }
