@@ -97,10 +97,14 @@ fn inspector_name(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
 }
 fn inspector_transform(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
   let transform: &mut Transform = t.downcast_mut().unwrap();
-  Drag::new("pos")
+  Drag::new("position")
     .speed(0.05)
     .display_format("%g")
     .build_array(ui, transform.position.as_mut());
+  Drag::new("rotation")
+    .speed(0.5)
+    .display_format("%g")
+    .build_array(ui, transform.rotation.as_mut());
   Drag::new("scale")
     .speed(0.05)
     .display_format("%g")
@@ -204,15 +208,17 @@ fn render(world: &mut World, ui: &Ui) {
 }
 
 fn asset_picker<T: Any>(ui: &Ui, label: &str, assets: &mut Assets, handle: &mut Handle<T>) {
+  let id = ui.push_id("##");
   if let Some(_) = ui.begin_combo(label, handle.name.clone()) {
     for asset in assets.get::<T>() {
       if ui
         .selectable_config(asset.name.clone())
-        .selected(handle.name == asset.name) // not great
+        .selected(handle.name == asset.name)
         .build()
       {
         *handle = asset;
       }
     }
   }
+  id.end();
 }

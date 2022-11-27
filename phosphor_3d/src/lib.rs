@@ -10,7 +10,7 @@ use phosphor::log::warn;
 
 pub struct Transform {
   pub position: Vec3,
-  pub rotation: Quat,
+  pub rotation: Vec3,
   pub scale: Vec3,
 }
 
@@ -18,7 +18,7 @@ impl Transform {
   pub fn new() -> Self {
     Self {
       position: Vec3::ZERO,
-      rotation: Quat::IDENTITY,
+      rotation: Vec3::ZERO,
       scale: Vec3::ONE,
     }
   }
@@ -28,13 +28,8 @@ impl Transform {
     self
   }
 
-  pub fn rot_quat(mut self, rotation: Quat) -> Self {
+  pub fn rot(mut self, rotation: Vec3) -> Self {
     self.rotation = rotation;
-    self
-  }
-
-  pub fn rot_euler(mut self, rotation: Vec3) -> Self {
-    self.rotation = Quat::from_euler(EulerRot::XYZ, rotation.x, rotation.y, rotation.z);
     self
   }
 
@@ -44,7 +39,24 @@ impl Transform {
   }
 
   pub fn as_mat4(&self) -> Mat4 {
-    Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.position)
+    Mat4::from_scale_rotation_translation(
+      self.scale,
+      Quat::from_euler(
+        EulerRot::XYZ,
+        self.rotation.x.to_radians(),
+        self.rotation.y.to_radians(),
+        self.rotation.z.to_radians(),
+      ),
+      self.position,
+    )
+  }
+
+  pub fn dir(&self) -> Vec3 {
+    Vec3::new(
+      self.rotation.y.to_radians().cos() * self.rotation.x.to_radians().cos(),
+      self.rotation.x.to_radians().sin(),
+      self.rotation.y.to_radians().sin() * self.rotation.x.to_radians().cos(),
+    )
   }
 }
 
@@ -158,7 +170,7 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
           .get_resource::<HashMap<usize, MaterialShader>>()
           .unwrap();
 
-        let view = Mat4::look_to_rh(cam_t.position, cam_t.rotation.to_scaled_axis(), Vec3::Y);
+        let view = Mat4::look_to_rh(cam_t.position, cam_t.dir(), Vec3::Y);
         let projection =
           Mat4::perspective_rh(cam.fov.to_radians(), aspect, cam.clip[0], cam.clip[1]);
 

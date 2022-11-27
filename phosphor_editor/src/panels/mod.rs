@@ -21,7 +21,7 @@ pub fn setup_panels(world: &mut World) -> Result<()> {
   let outline = outline::init();
   let inspector = inspector::init(world);
   let info = info::init();
-  let assets = assets::init();
+  let assets = assets::init(world);
   world.add_resource(vec![scene, outline, inspector, info, assets]);
   Ok(())
 }

@@ -11,7 +11,7 @@ use crate::gfx::{Texture, Mesh, Vertex};
 use crate::{Result, TypeIdNamed};
 
 pub struct Assets {
-  handles: HashMap<
+  pub handles: HashMap<
     TypeIdNamed,
     (
       Vec<Handle<dyn Any>>,

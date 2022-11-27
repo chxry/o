@@ -27,7 +27,7 @@ fn start(world: &mut World) -> Result {
     .insert(
       Transform::new()
         .pos(Vec3::new(0.0, 1.0, -10.0))
-        .rot_euler(Vec3::new(0.0, 0.0, 1.5)),
+        .rot(Vec3::new(0.0, 90.0, 0.0)),
     )
     .insert(Camera::new(80.0, [0.1, 100.0]));
   world
@@ -42,9 +42,9 @@ fn draw(world: &mut World) -> Result {
   let teapot = world.get_name("teapot").unwrap();
   let ui = world.get_resource::<Ui>().unwrap();
   ui.window("debug").always_auto_resize(true).build(|| {
-    Drag::new("position")
-      .speed(0.05)
-      .build_array(&ui, teapot.get::<Transform>().unwrap().position.as_mut());
+    Drag::new("rotation")
+      .speed(0.5)
+      .build_array(&ui, teapot.get::<Transform>().unwrap().rotation.as_mut());
   });
   Ok(())
 }

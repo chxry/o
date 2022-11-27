@@ -2,7 +2,7 @@ use phosphor::Result;
 use phosphor::ecs::{World, Name, Stage};
 use phosphor::gfx::{Texture, Mesh, Framebuffer, Renderer};
 use phosphor::glfw::{Key, Action, CursorMode, MouseButton};
-use phosphor::math::{Vec3, Quat};
+use phosphor::math::Vec3;
 use phosphor::assets::Assets;
 use phosphor_ui::imgui::{Ui, Image, TextureId, WindowFlags, StyleVar};
 use phosphor_3d::{Camera, Transform, Material, SceneDrawOptions, scenerenderer};
@@ -15,15 +15,17 @@ struct SceneState {
   fb: Framebuffer,
   tex: Texture,
   last_pos: (f32, f32),
-  yaw: f32,
-  pitch: f32,
 }
 
 pub fn init(world: &mut World) -> Result<Panel> {
   let assets = world.get_resource::<Assets>().unwrap();
   world
     .spawn("cam")
-    .insert(Transform::new().pos(Vec3::new(0.0, 1.0, -10.0)))
+    .insert(
+      Transform::new()
+        .pos(Vec3::new(0.0, 1.0, -10.0))
+        .rot(Vec3::new(0.0, 90.0, 0.0)),
+    )
     .insert(Camera::new(80.0, [0.1, 100.0]));
   world
     .spawn("teapot")
@@ -53,8 +55,6 @@ pub fn init(world: &mut World) -> Result<Panel> {
     fb,
     tex,
     last_pos: (0.0, 0.0),
-    yaw: 1.5,
-    pitch: 0.0,
   });
   scenerenderer(world)?;
   world.add_system(Stage::PreDraw, &predraw);
@@ -84,25 +84,19 @@ fn predraw(world: &mut World) -> Result {
       }
       let (dx, dy) = (x - s.last_pos.0, y - s.last_pos.1);
       s.last_pos = (x, y);
-      s.yaw += dx / 300.0;
-      s.pitch = (s.pitch - dy / 300.0).clamp(-1.5, 1.5);
+      cam_t.rotation.y += dx / 5.0;
+      cam_t.rotation.x = (cam_t.rotation.x - dy / 5.0).clamp(-89.9, 89.9);
     } else {
       renderer.window.set_cursor_mode(CursorMode::Normal);
     }
 
-    let dir = Vec3::new(
-      s.yaw.cos() * s.pitch.cos(),
-      s.pitch.sin(),
-      s.yaw.sin() * s.pitch.cos(),
-    ) * 0.15;
-    cam_t.rotation = Quat::from_scaled_axis(dir);
-    // let dir = cam_t.rotation.to_scaled_axis() * 0.15;
-    let right = dir.cross(Vec3::Y);
+    let front = cam_t.dir() * 0.15;
+    let right = front.cross(Vec3::Y);
     if renderer.window.get_key(Key::W) == Action::Press {
-      cam_t.position += dir;
+      cam_t.position += front;
     }
     if renderer.window.get_key(Key::S) == Action::Press {
-      cam_t.position -= dir;
+      cam_t.position -= front;
     }
     if renderer.window.get_key(Key::A) == Action::Press {
       cam_t.position -= right
