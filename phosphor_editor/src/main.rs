@@ -28,8 +28,8 @@ fn main() -> Result<()> {
           ("res/fontawesome.ttf", 14.0, Some(&[0xe005, 0xf8ff, 0])),
         ],
         &[
-          ("res/shingo.otf", 44.0, None),
-          ("res/fontawesome.ttf", 44.0, Some(&[0xe005, 0xf8ff, 0])),
+          ("res/shingo.otf", 48.0, None),
+          ("res/fontawesome.ttf", 48.0, Some(&[0xe005, 0xf8ff, 0])),
         ],
       ],
     })

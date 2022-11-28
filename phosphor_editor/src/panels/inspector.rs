@@ -6,10 +6,11 @@ use phosphor::gfx::{Texture, Mesh};
 use phosphor::assets::{Handle, Assets};
 use phosphor::math::Vec3;
 use phosphor_ui::hover_tooltip;
-use phosphor_ui::imgui::{Ui, Drag, WindowFlags, TreeNodeFlags};
+use phosphor_ui::imgui::{Ui, Drag, WindowFlags, TreeNodeFlags, DragDropFlags};
 use phosphor_3d::{Camera, Transform, Material};
 use crate::SelectedEntity;
 use crate::panels::Panel;
+use super::assets::SelectedAsset;
 
 pub fn init(world: &mut World) -> Panel {
   let mut panels = HashMap::new();
@@ -125,7 +126,7 @@ fn inspector_camera(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
 
 fn inspector_mesh(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
   let mesh: &mut Handle<Mesh> = t.downcast_mut().unwrap();
-  asset_picker(ui, "mesh", world.get_resource::<Assets>().unwrap(), mesh);
+  asset_picker(ui, "mesh", world, mesh);
 }
 
 struct MaterialInspector {
@@ -167,7 +168,7 @@ fn material_color_default(_: &mut World) -> Material {
 
 fn material_texture(ui: &Ui, mat: &mut Material, world: &mut World) {
   let tex: &mut Handle<Texture> = mat.data.downcast_mut().unwrap();
-  asset_picker(ui, "texture", world.get_resource::<Assets>().unwrap(), tex);
+  asset_picker(ui, "texture", world, tex);
 }
 
 fn material_texture_default(world: &mut World) -> Material {
@@ -207,8 +208,9 @@ fn render(world: &mut World, ui: &Ui) {
   }
 }
 
-fn asset_picker<T: Any>(ui: &Ui, label: &str, assets: &mut Assets, handle: &mut Handle<T>) {
+fn asset_picker<T: Any>(ui: &Ui, label: &str, world: &mut World, handle: &mut Handle<T>) {
   let id = ui.push_id("##");
+  let assets = world.get_resource::<Assets>().unwrap();
   if let Some(_) = ui.begin_combo(label, handle.name.clone()) {
     for asset in assets.get::<T>() {
       if ui
@@ -218,6 +220,13 @@ fn asset_picker<T: Any>(ui: &Ui, label: &str, assets: &mut Assets, handle: &mut 
       {
         *handle = asset;
       }
+    }
+  }
+  if let Some(target) = ui.drag_drop_target() {
+    if let Some(_) = target.accept_payload_empty(std::any::type_name::<T>(), DragDropFlags::empty())
+    {
+      let selected = world.get_resource::<SelectedAsset>().unwrap();
+      *handle = selected.0.as_ref().unwrap().1.downcast();
     }
   }
   id.end();

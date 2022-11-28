@@ -113,7 +113,7 @@ impl Handle<dyn Any> {
     }
   }
 
-  fn downcast<T: Any>(&self) -> Handle<T> {
+  pub fn downcast<T: Any>(&self) -> Handle<T> {
     Handle {
       name: self.name.clone(),
       data: self.data.clone().downcast().unwrap(),
