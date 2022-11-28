@@ -39,11 +39,7 @@ pub fn init(world: &mut World) -> Result<Panel> {
     .insert(Material::color(Vec3::X));
   world
     .spawn("garfield")
-    .insert(
-      Transform::new()
-        .pos(Vec3::new(-5.0, 0.0, 0.0))
-        .scale(Vec3::splat(5.0)),
-    )
+    .insert(Transform::new().pos(Vec3::new(-5.0, 0.0, 0.0)))
     .insert(assets.load::<Mesh>("res/garfield.obj")?)
     .insert(Material::texture(assets.load("res/garfield.png")?));
   let fb = Framebuffer::new();

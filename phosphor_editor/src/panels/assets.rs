@@ -1,9 +1,10 @@
 use std::any::Any;
 use std::collections::HashMap;
 use phosphor::TypeIdNamed;
-use phosphor::gfx::Texture;
+use phosphor::gfx::{Texture, Mesh, Shader, Framebuffer, Renderer};
 use phosphor::ecs::World;
 use phosphor::assets::{Assets, Handle};
+use phosphor::math::{Mat4, Vec3, Quat};
 use phosphor_ui::imgui::{Ui, WindowFlags, Image, TextureId};
 use crate::panels::Panel;
 
@@ -11,11 +12,28 @@ type Preview = &'static dyn Fn(&Ui, &World, &Handle<dyn Any>, [f32; 2]);
 
 pub struct SelectedAsset(pub Option<(TypeIdNamed, Handle<dyn Any>)>);
 
+struct MeshPreviewState {
+  fb: Framebuffer,
+  textures: HashMap<String, Texture>,
+  selected_tex: Texture,
+  shader: Shader,
+  spin: f32,
+}
+
 pub fn init(world: &mut World) -> Panel {
   let mut previews = HashMap::new();
   previews.insert(TypeIdNamed::of::<Texture>(), &preview_texture as Preview);
+  previews.insert(TypeIdNamed::of::<Mesh>(), &preview_mesh as Preview);
   world.add_resource(previews);
   world.add_resource(SelectedAsset(None));
+  let fb = Framebuffer::new();
+  world.add_resource(MeshPreviewState {
+    fb,
+    textures: HashMap::new(),
+    selected_tex: Texture::empty(),
+    shader: Shader::new("res/base.vert", "res/preview.frag").unwrap(),
+    spin: 0.0,
+  });
   Panel {
     title: "\u{f660} Assets",
     flags: WindowFlags::empty(),
@@ -32,6 +50,47 @@ fn preview_texture(ui: &Ui, _: &World, handle: &Handle<dyn Any>, size: [f32; 2])
     [size, size],
   )
   .build(ui);
+}
+
+fn preview_mesh(ui: &Ui, world: &World, handle: &Handle<dyn Any>, size: [f32; 2]) {
+  let state = world.get_resource::<MeshPreviewState>().unwrap();
+  let renderer = world.get_resource::<Renderer>().unwrap();
+  let (tex, spin) = if size[0] == size[1] {
+    (
+      state
+        .textures
+        .entry(handle.name.clone())
+        .or_insert_with(|| Texture::empty()),
+      0.0,
+    )
+  } else {
+    state.spin += 0.005;
+    (&mut state.selected_tex, state.spin)
+  };
+
+  tex.resize(size[0] as _, size[1] as _);
+  state.fb.resize(size[0] as _, size[1] as _);
+  state.fb.bind_tex(&tex);
+  renderer.resize(size[0] as _, size[1] as _);
+  renderer.clear(0.0, 0.0, 0.0, 0.0);
+  state.shader.bind();
+  state.shader.set_mat4(
+    "model",
+    &Mat4::from_rotation_translation(Quat::from_rotation_y(spin), Vec3::NEG_Y),
+  );
+  state.shader.set_mat4(
+    "view",
+    &Mat4::look_at_rh(Vec3::splat(5.0), Vec3::ZERO, Vec3::Y),
+  );
+  state.shader.set_mat4(
+    "projection",
+    &Mat4::perspective_rh(1.0, size[0] / size[1], 0.1, 50.0),
+  );
+  handle.downcast::<Mesh>().draw();
+  Image::new(TextureId::new(tex.0 as _), size)
+    .uv0([0.0, 1.0])
+    .uv1([1.0, 0.0])
+    .build(ui);
 }
 
 fn render(world: &mut World, ui: &Ui) {

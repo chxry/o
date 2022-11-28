@@ -157,15 +157,14 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
           Some(o) => {
             o.fb.bind();
             renderer.resize(o.size[0] as _, o.size[1] as _);
-            renderer.clear();
             o.size[0] / o.size[1]
           }
           None => {
             renderer.resize(w as _, h as _);
-            renderer.clear();
             w as f32 / h as f32
           }
         };
+        renderer.clear(0.0, 0.0, 0.0, 1.0);
         let mats = world
           .get_resource::<HashMap<usize, MaterialShader>>()
           .unwrap();
