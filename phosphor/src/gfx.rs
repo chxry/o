@@ -32,6 +32,7 @@ impl Renderer {
     gl::load_with(|s| window.get_proc_address(s));
     unsafe {
       gl::Enable(gl::FRAMEBUFFER_SRGB);
+      gl::Enable(gl::LINE_SMOOTH);
       gl::Enable(gl::DEPTH_TEST);
       gl::Enable(gl::SCISSOR_TEST);
       gl::Enable(gl::BLEND);
@@ -204,8 +205,8 @@ impl Texture {
       let mut tex = 0;
       gl::GenTextures(1, &mut tex);
       gl::BindTexture(gl::TEXTURE_2D, tex);
-      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as _);
-      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as _);
+      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
+      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
       gl::TexImage2D(
         gl::TEXTURE_2D,
         0,
@@ -226,8 +227,8 @@ impl Texture {
       let mut tex = 0;
       gl::GenTextures(1, &mut tex);
       gl::BindTexture(gl::TEXTURE_2D, tex);
-      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as _);
-      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as _);
+      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
+      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
       gl::TexImage2D(
         gl::TEXTURE_2D,
         0,

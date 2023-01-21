@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use phosphor::TypeIdNamed;
-use phosphor::gfx::{Texture, Mesh, Shader, Framebuffer, Renderer};
+use phosphor::gfx::{Texture, Mesh, Shader, Framebuffer, Renderer, gl};
 use phosphor::ecs::World;
 use phosphor::assets::{Assets, Handle};
 use phosphor::math::{Mat4, Vec3, Quat};
@@ -31,7 +31,7 @@ pub fn init(world: &mut World) -> Panel {
     fb,
     textures: HashMap::new(),
     selected_tex: Texture::empty(),
-    shader: Shader::new("res/base.vert", "res/preview.frag").unwrap(),
+    shader: Shader::new("res/base.vert", "res/color.frag").unwrap(),
     spin: 0.0,
   });
   Panel {
@@ -55,6 +55,7 @@ fn preview_texture(ui: &Ui, _: &World, handle: &Handle<dyn Any>, size: [f32; 2])
 fn preview_mesh(ui: &Ui, world: &World, handle: &Handle<dyn Any>, size: [f32; 2]) {
   let state = world.get_resource::<MeshPreviewState>().unwrap();
   let renderer = world.get_resource::<Renderer>().unwrap();
+  let fb_size = [size[0] * 2.5, size[1] * 2.5];
   let (tex, spin) = if size[0] == size[1] {
     (
       state
@@ -68,10 +69,10 @@ fn preview_mesh(ui: &Ui, world: &World, handle: &Handle<dyn Any>, size: [f32; 2]
     (&mut state.selected_tex, state.spin)
   };
 
-  tex.resize(size[0] as _, size[1] as _);
-  state.fb.resize(size[0] as _, size[1] as _);
+  tex.resize(fb_size[0] as _, fb_size[1] as _);
+  state.fb.resize(fb_size[0] as _, fb_size[1] as _);
   state.fb.bind_tex(&tex);
-  renderer.resize(size[0] as _, size[1] as _);
+  renderer.resize(fb_size[0] as _, fb_size[1] as _);
   renderer.clear(0.0, 0.0, 0.0, 0.0);
   state.shader.bind();
   state.shader.set_mat4(
@@ -86,7 +87,15 @@ fn preview_mesh(ui: &Ui, world: &World, handle: &Handle<dyn Any>, size: [f32; 2]
     "projection",
     &Mat4::perspective_rh(1.0, size[0] / size[1], 0.1, 50.0),
   );
+  state.shader.set_vec3("u_color", &Vec3::splat(0.5));
   handle.downcast::<Mesh>().draw();
+  unsafe {
+    gl::LineWidth(5.0);
+    gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
+    state.shader.set_vec3("u_color", &Vec3::ZERO);
+    handle.downcast::<Mesh>().draw();
+    gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
+  }
   Image::new(TextureId::new(tex.0 as _), size)
     .uv0([0.0, 1.0])
     .uv1([1.0, 0.0])

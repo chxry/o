@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::any::Any;
 use phosphor::Result;
-use phosphor::gfx::{Renderer, Shader, Texture, Mesh, Framebuffer};
+use phosphor::gfx::{Renderer, Shader, Texture, Mesh, Framebuffer, Vertex, gl};
 use phosphor::ecs::{World, Stage};
 use phosphor::math::{Vec3, Quat, EulerRot, Mat4};
 use phosphor::assets::Handle;
@@ -121,6 +121,11 @@ fn material_texture(_: &Shader, data: &Box<dyn Any>) {
   tex.bind();
 }
 
+struct Sky {
+  mesh: Mesh,
+  shader: Shader,
+}
+
 pub fn scenerenderer(world: &mut World) -> Result<()> {
   world.add_resource(HashMap::from([
     (
@@ -138,6 +143,30 @@ pub fn scenerenderer(world: &mut World) -> Result<()> {
       },
     ),
   ]));
+  world.add_resource(Sky {
+    mesh: Mesh::new(
+      &[
+        Vertex {
+          pos: [1.0, 1.0, 0.0],
+          uv: [1.0, 1.0],
+        },
+        Vertex {
+          pos: [1.0, -1.0, 0.0],
+          uv: [1.0, 0.0],
+        },
+        Vertex {
+          pos: [-1.0, 1.0, 0.0],
+          uv: [0.0, 1.0],
+        },
+        Vertex {
+          pos: [-1.0, -1.0, 0.0],
+          uv: [0.0, 0.0],
+        },
+      ],
+      &[0, 1, 2, 1, 3, 2],
+    ),
+    shader: Shader::new("res/sky.vert", "res/sky.frag")?,
+  });
   world.add_system(Stage::Draw, &scenerenderer_draw);
   Ok(())
 }
@@ -172,6 +201,16 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
         let view = Mat4::look_to_rh(cam_t.position, cam_t.dir(), Vec3::Y);
         let projection =
           Mat4::perspective_rh(cam.fov.to_radians(), aspect, cam.clip[0], cam.clip[1]);
+
+        let sky = world.get_resource::<Sky>().unwrap();
+        sky.shader.bind();
+        sky.shader.set_mat4("view", &view);
+        sky.shader.set_mat4("projection", &projection);
+        unsafe {
+          gl::DepthMask(gl::FALSE);
+          sky.mesh.draw();
+          gl::DepthMask(gl::TRUE);
+        }
 
         for (e, mesh) in world.query::<Handle<Mesh>>() {
           match e.get::<Transform>() {
