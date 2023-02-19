@@ -14,7 +14,7 @@ pub fn init() -> Panel {
 }
 
 fn render(_: &mut World, ui: &Ui) {
-  for record in shitlog::records() {
+  for record in ezlogger::records() {
     let font = ui.push_font(ui.fonts().fonts()[1]);
     ui.set_window_font_scale(0.65);
     let (color, icon) = match record.level {

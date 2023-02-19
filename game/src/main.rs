@@ -11,7 +11,7 @@ use phosphor::math::Vec3;
 use phosphor::assets::Assets;
 
 fn main() -> Result {
-  shitlog::init(LevelFilter::Trace)?;
+  ezlogger::init(LevelFilter::Trace)?;
   Engine::new()
     .add_system(stage::START, &scenerenderer)
     .add_system(stage::START, &uirenderer)

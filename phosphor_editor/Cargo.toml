@@ -7,4 +7,4 @@ edition = "2021"
 phosphor = { path = "../phosphor" }
 phosphor_3d = { path = "../phosphor_3d" }
 phosphor_imgui = { path = "../phosphor_imgui" }
-shitlog = { path = "../../shitlog" }
+ezlogger = "0.1"

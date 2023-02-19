@@ -18,7 +18,7 @@ const TEXT: &str = concat!(
 );
 
 fn main() -> Result<()> {
-  shitlog::init(LevelFilter::Trace)?;
+  ezlogger::init(LevelFilter::Trace)?;
   Engine::new()
     .add_resource(UiRendererOptions {
       docking: true,
