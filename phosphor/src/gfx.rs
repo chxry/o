@@ -3,7 +3,7 @@ use std::ffi::{CStr, CString};
 use std::sync::mpsc::Receiver;
 use glfw::{Context, WindowEvent};
 use glam::{Mat4, Vec3};
-use log::info;
+use log::debug;
 use crate::Result;
 
 pub use gl;
@@ -44,7 +44,7 @@ impl Renderer {
       );
       let version = CStr::from_ptr(gl::GetString(gl::VERSION) as _).to_str()?;
       let renderer = CStr::from_ptr(gl::GetString(gl::RENDERER) as _).to_str()?;
-      info!("Created OpenGL {} renderer on {}.", version, renderer);
+      debug!("Created OpenGL {} renderer on {}.", version, renderer);
       Ok(Self {
         glfw,
         window,

@@ -1,10 +1,11 @@
 mod panels;
 
 use phosphor::{Engine, Result, mutate};
-use phosphor::ecs::{Stage, World};
+use phosphor::ecs::{World, stage};
+use phosphor::scene::Scene;
 use phosphor::log::LevelFilter;
-use phosphor_ui::{uirenderer, UiRendererOptions};
-use phosphor_ui::imgui::{Ui, StyleStackToken};
+use phosphor_imgui::{uirenderer, UiRendererOptions};
+use phosphor_imgui::imgui::{Ui, StyleStackToken};
 use crate::panels::{Panel, setup_panels};
 
 pub struct SelectedEntity(Option<usize>);
@@ -17,7 +18,7 @@ const TEXT: &str = concat!(
 );
 
 fn main() -> Result<()> {
-  env_logger::builder().filter_level(LevelFilter::Info).init();
+  shitlog::init(LevelFilter::Trace)?;
   Engine::new()
     .add_resource(UiRendererOptions {
       docking: true,
@@ -34,9 +35,9 @@ fn main() -> Result<()> {
       ],
     })
     .add_resource(SelectedEntity(None))
-    .add_system(Stage::Start, &uirenderer)
-    .add_system(Stage::Start, &setup_panels)
-    .add_system(Stage::Draw, &draw_ui)
+    .add_system(stage::START, &uirenderer)
+    .add_system(stage::START, &setup_panels)
+    .add_system(stage::DRAW, &draw_ui)
     .run()
 }
 
@@ -44,7 +45,14 @@ fn draw_ui(world: &mut World) -> Result<()> {
   let ui = world.get_resource::<Ui>().unwrap();
   let panels = world.get_resource::<Vec<Panel>>().unwrap();
   ui.main_menu_bar(|| {
-    ui.menu("File", || {});
+    ui.menu("File", || {
+      if ui.menu_item("Save") {
+        Scene::save(world, "test.scene").unwrap();
+      }
+      if ui.menu_item("Load") {
+        Scene::load(mutate(world), "test.scene").unwrap();
+      }
+    });
     ui.menu("View", || {
       for panel in panels.iter_mut() {
         ui.menu_item_config(panel.title)

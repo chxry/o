@@ -9,9 +9,9 @@ use phosphor::glfw::{
 };
 use phosphor::Result;
 use phosphor::gfx::{Renderer, Shader, Texture, gl};
-use phosphor::ecs::{World, Stage};
+use phosphor::ecs::{World, stage};
 use phosphor::math::Mat4;
-use phosphor::log::info;
+use phosphor::log::debug;
 
 pub use imgui;
 
@@ -41,7 +41,7 @@ struct UiRenderer {
 pub fn uirenderer(world: &mut World) -> Result<()> {
   let renderer = world.get_resource::<Renderer>().unwrap();
   let mut imgui = imgui::Context::create();
-  info!("Created imgui {} context.", imgui::dear_imgui_version());
+  debug!("Created imgui {} context.", imgui::dear_imgui_version());
   let options = match world.get_resource::<UiRendererOptions>() {
     Some(o) => o,
     None => &UiRendererOptions::DEFAULT,
@@ -72,7 +72,7 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
   io[Key::Space] = GlfwKey::Space as _;
   io[Key::Enter] = GlfwKey::Enter as _;
   io[Key::Escape] = GlfwKey::Escape as _;
-  io[Key::KeyPadEnter] = GlfwKey::KpEnter as _;
+  io[Key::KeypadEnter] = GlfwKey::KpEnter as _;
   io[Key::A] = GlfwKey::A as _;
   io[Key::C] = GlfwKey::C as _;
   io[Key::V] = GlfwKey::V as _;
@@ -186,8 +186,8 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
     last_frame: Instant::now(),
   });
   world.add_event_handler(&uirenderer_event);
-  world.add_system(Stage::PreDraw, &uirenderer_predraw);
-  world.add_system(Stage::PostDraw, &uirenderer_draw);
+  world.add_system(stage::PRE_DRAW, &uirenderer_predraw);
+  world.add_system(stage::POST_DRAW, &uirenderer_draw);
   Ok(())
 }
 

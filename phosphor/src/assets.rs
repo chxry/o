@@ -7,8 +7,9 @@ use std::fs::File;
 use obj::{Obj, TexturedVertex};
 use image::imageops::flip_vertical_in_place;
 use log::error;
+use serde::{Serialize, Deserialize, Deserializer};
 use crate::gfx::{Texture, Mesh, Vertex};
-use crate::{Result, TypeIdNamed};
+use crate::{Result, TypeIdNamed, WORLD};
 
 pub struct Assets {
   pub handles: HashMap<
@@ -83,9 +84,26 @@ impl Assets {
   }
 }
 
+#[derive(Serialize)]
 pub struct Handle<T: ?Sized> {
   pub name: String,
+  #[serde(skip)]
   data: Rc<T>,
+}
+
+impl<'de, T: Any> Deserialize<'de> for Handle<T> {
+  fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+    let name: String = Deserialize::deserialize(deserializer)?;
+    Ok(unsafe {
+      WORLD
+        .get_mut()
+        .unwrap()
+        .get_resource::<Assets>()
+        .unwrap()
+        .load(&name)
+        .unwrap()
+    })
+  }
 }
 
 impl<T> Deref for Handle<T> {

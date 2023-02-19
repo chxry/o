@@ -1,25 +1,24 @@
 use std::collections::{HashMap, BTreeMap};
 use std::any::Any;
-use std::hash::Hash;
 use glfw::WindowEvent;
 use log::error;
-use crate::{Result, HashMapExt, TypeIdNamed, mutate};
+use serde::{Serialize, Deserialize};
+use crate::{Result, HashMapExt, TypeIdNamed, mutate, component, WORLD};
 
 pub type System = &'static dyn Fn(&mut World) -> Result;
 pub type EventHandler = &'static dyn Fn(&mut World, &WindowEvent) -> Result<()>;
 
-#[derive(Copy, Clone, Hash, Eq, PartialEq)]
-pub enum Stage {
-  Start,
-  PreDraw,
-  Draw,
-  PostDraw,
+pub mod stage {
+  pub const START: usize = 0;
+  pub const PRE_DRAW: usize = 1;
+  pub const DRAW: usize = 2;
+  pub const POST_DRAW: usize = 3;
 }
 
 pub struct World {
-  components: HashMap<TypeIdNamed, Vec<(usize, Box<dyn Any>)>>,
+  pub components: HashMap<TypeIdNamed, Vec<(usize, Box<dyn Any>)>>,
   resources: HashMap<TypeIdNamed, Box<dyn Any>>,
-  systems: HashMap<Stage, Vec<System>>,
+  systems: HashMap<usize, Vec<System>>,
   event_handlers: Vec<EventHandler>,
 }
 
@@ -34,14 +33,14 @@ impl World {
   }
 
   pub fn spawn(&self, name: &str) -> Entity {
+    self.spawn_empty().insert(Name(name.to_string()))
+  }
+
+  pub(crate) fn spawn_empty(&self) -> Entity {
     unsafe {
       static mut COUNTER: usize = 0;
       COUNTER += 1;
-      Entity {
-        id: COUNTER,
-        world: mutate(self),
-      }
-      .insert(Name(name.to_string()))
+      Entity { id: COUNTER }
     }
   }
 
@@ -49,15 +48,7 @@ impl World {
     match self.components.get(&TypeIdNamed::of::<T>()) {
       Some(v) => v
         .iter()
-        .map(|(e, b)| {
-          (
-            Entity {
-              id: *e,
-              world: mutate(self),
-            },
-            mutate(b.downcast_ref().unwrap()),
-          )
-        })
+        .map(|(e, b)| (Entity { id: *e }, mutate(b.downcast_ref().unwrap())))
         .collect(),
       None => vec![],
     }
@@ -65,15 +56,10 @@ impl World {
 
   pub fn get_id<T: Any>(&self, id: usize) -> Option<(Entity, &mut T)> {
     match self.components.get(&TypeIdNamed::of::<T>()) {
-      Some(v) => v.iter().find(|(e, _)| *e == id).map(|s| {
-        (
-          Entity {
-            id: s.0,
-            world: mutate(self),
-          },
-          mutate(s.1.downcast_ref().unwrap()),
-        )
-      }),
+      Some(v) => v
+        .iter()
+        .find(|(e, _)| *e == id)
+        .map(|s| (Entity { id: s.0 }, mutate(s.1.downcast_ref().unwrap()))),
       None => None,
     }
   }
@@ -101,6 +87,12 @@ impl World {
       .map(|m| m.0)
   }
 
+  pub fn remove_id(&self, t: TypeIdNamed, id: usize) {
+    if let Some(v) = self.components.get(&t) {
+      mutate(v).retain(|c| c.0 != id);
+    }
+  }
+
   pub fn add_resource<T: Any>(&mut self, resource: T) {
     self
       .resources
@@ -121,11 +113,11 @@ impl World {
       .map(|r| *r.downcast().unwrap())
   }
 
-  pub fn add_system(&mut self, stage: Stage, sys: System) {
+  pub fn add_system(&mut self, stage: usize, sys: System) {
     self.systems.push_or_insert(stage, sys);
   }
 
-  pub fn run_system(&self, stage: Stage) {
+  pub fn run_system(&self, stage: usize) {
     if let Some(vec) = self.systems.get(&stage) {
       for sys in vec.clone() {
         if let Err(e) = sys(mutate(self)) {
@@ -148,23 +140,28 @@ impl World {
   }
 }
 
+#[derive(Serialize, Deserialize)]
+#[component]
 pub struct Name(pub String);
 
-pub struct Entity<'w> {
+pub struct Entity {
   pub id: usize,
-  world: &'w mut World,
 }
 
-impl Entity<'_> {
+// move stuff into here
+impl Entity {
   pub fn insert<T: Any>(self, component: T) -> Self {
-    self
-      .world
-      .components
-      .push_or_insert(TypeIdNamed::of::<T>(), (self.id, Box::new(component)));
+    unsafe {
+      WORLD
+        .get_mut()
+        .unwrap()
+        .components
+        .push_or_insert(TypeIdNamed::of::<T>(), (self.id, Box::new(component)));
+    }
     self
   }
 
   pub fn get<T: Any>(&self) -> Option<&mut T> {
-    self.world.get_id(self.id).map(|c| c.1)
+    unsafe { WORLD.get().unwrap().get_id(self.id).map(|c| c.1) }
   }
 }

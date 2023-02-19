@@ -5,7 +5,7 @@ use phosphor::gfx::{Texture, Mesh, Shader, Framebuffer, Renderer, gl};
 use phosphor::ecs::World;
 use phosphor::assets::{Assets, Handle};
 use phosphor::math::{Mat4, Vec3, Quat};
-use phosphor_ui::imgui::{Ui, WindowFlags, Image, TextureId};
+use phosphor_imgui::imgui::{Ui, WindowFlags, Image, TextureId};
 use crate::panels::Panel;
 
 type Preview = &'static dyn Fn(&Ui, &World, &Handle<dyn Any>, [f32; 2]);

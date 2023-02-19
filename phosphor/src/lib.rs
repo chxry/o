@@ -1,63 +1,78 @@
+#![feature(const_type_id)]
+#![feature(const_type_name)]
 pub mod gfx;
 pub mod ecs;
 pub mod assets;
+pub mod scene;
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::any::{Any, TypeId, type_name};
 use std::cmp::Ordering;
+use std::mem;
 use glfw::Context;
+use once_cell::unsync::OnceCell;
 use crate::gfx::Renderer;
-use crate::ecs::{World, Stage, System};
+use crate::ecs::{World, System, stage};
 use crate::assets::Assets;
 
+pub use phosphor_derive::*;
 pub use glam as math;
 pub use log;
 pub use glfw;
+pub use bincode;
+pub use linkme;
 
 pub type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-pub struct Engine {
-  world: World,
-}
+// use this instead of hacky pointer tricks
+static mut WORLD: OnceCell<World> = OnceCell::new();
+
+pub struct Engine;
 
 impl Engine {
   pub fn new() -> Self {
-    Self {
-      world: World::new(),
+    unsafe {
+      let _ = WORLD.set(World::new());
     }
+    Self
   }
 
-  pub fn add_resource<T: Any>(mut self, resource: T) -> Self {
-    self.world.add_resource(resource);
+  pub fn add_resource<T: Any>(self, resource: T) -> Self {
+    unsafe {
+      WORLD.get_mut().unwrap().add_resource(resource);
+    }
     self
   }
 
-  pub fn add_system(mut self, stage: Stage, sys: System) -> Self {
-    self.world.add_system(stage, sys);
+  pub fn add_system(self, stage: usize, sys: System) -> Self {
+    unsafe {
+      WORLD.get_mut().unwrap().add_system(stage, sys);
+    }
     self
   }
 
-  pub fn run(mut self) -> Result<()> {
-    self.world.add_resource(Assets::new());
-    self.world.add_resource(Renderer::new()?);
-    let renderer = self.world.get_resource::<Renderer>().unwrap();
-    self.world.run_system(Stage::Start);
+  pub fn run(self) -> Result<()> {
+    let world = unsafe { WORLD.get_mut().unwrap() };
+    world.add_resource(Assets::new());
+    world.add_resource(Renderer::new()?);
+    let renderer = world.get_resource::<Renderer>().unwrap();
+    world.run_system(stage::START);
     while !renderer.window.should_close() {
       renderer.glfw.poll_events();
       for (_, event) in renderer.events.try_iter() {
-        self.world.run_event_handler(event);
+        world.run_event_handler(event);
       }
-      self.world.run_system(Stage::PreDraw);
-      self.world.run_system(Stage::Draw);
-      self.world.run_system(Stage::PostDraw);
+      world.run_system(stage::PRE_DRAW);
+      world.run_system(stage::DRAW);
+      world.run_system(stage::POST_DRAW);
       renderer.window.swap_buffers();
     }
     Ok(())
   }
 }
 
-trait HashMapExt<K, V> {
+pub trait HashMapExt<K, V> {
   fn push_or_insert(&mut self, key: K, val: V);
 }
 
@@ -79,11 +94,15 @@ pub struct TypeIdNamed {
 }
 
 impl TypeIdNamed {
-  pub fn of<T: Any>() -> Self {
+  pub const fn of<T: Any>() -> Self {
     Self {
       id: TypeId::of::<T>(),
       name: type_name::<T>(),
     }
+  }
+
+  pub fn id(&self) -> usize {
+    unsafe { mem::transmute(self.id) }
   }
 }
 

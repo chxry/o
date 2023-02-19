@@ -1,8 +1,8 @@
 use phosphor::{Engine, Result};
-use phosphor::ecs::{World, Stage};
+use phosphor::ecs::{World, stage};
 use phosphor::gfx::Mesh;
-use phosphor_3d::{Transform, Camera, Material, scenerenderer};
-use phosphor_ui::{
+use phosphor_3d::{Transform, Camera, Model, Material, scenerenderer};
+use phosphor_imgui::{
   imgui::{Ui, Drag},
   uirenderer,
 };
@@ -11,12 +11,12 @@ use phosphor::math::Vec3;
 use phosphor::assets::Assets;
 
 fn main() -> Result {
-  env_logger::builder().filter_level(LevelFilter::Info).init();
+  shitlog::init(LevelFilter::Trace)?;
   Engine::new()
-    .add_system(Stage::Start, &scenerenderer)
-    .add_system(Stage::Start, &uirenderer)
-    .add_system(Stage::Start, &start)
-    .add_system(Stage::Draw, &draw)
+    .add_system(stage::START, &scenerenderer)
+    .add_system(stage::START, &uirenderer)
+    .add_system(stage::START, &start)
+    .add_system(stage::DRAW, &draw)
     .run()
 }
 
@@ -32,9 +32,10 @@ fn start(world: &mut World) -> Result {
     .insert(Camera::new(80.0, [0.1, 100.0]));
   world
     .spawn("teapot")
-    .insert(Transform::new())
-    .insert(assets.load::<Mesh>("res/teapot.obj")?)
-    .insert(Material::texture(assets.load("res/brick.jpg")?));
+    .insert(Transform::new().rot(Vec3::new(0.0, 90.0, 0.0)))
+    .insert(Model(assets.load::<Mesh>("res/teapot.obj")?))
+    .insert(Material::Texture(assets.load("res/brick.jpg")?));
+  phosphor::scene::Scene::save(world, "test.scene")?;
   Ok(())
 }
 

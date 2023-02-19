@@ -1,5 +1,5 @@
 [package]
-name = "phosphor_ui"
+name = "phosphor_imgui"
 version = "0.1.0"
 edition = "2021"
 

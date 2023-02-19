@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 use std::any::Any;
-use phosphor::{TypeIdNamed, mutate};
+use phosphor::{TypeIdNamed, HashMapExt, mutate};
 use phosphor::ecs::{World, Name};
-use phosphor::gfx::{Texture, Mesh};
 use phosphor::assets::{Handle, Assets};
-use phosphor::math::Vec3;
-use phosphor_ui::hover_tooltip;
-use phosphor_ui::imgui::{Ui, Drag, WindowFlags, TreeNodeFlags, DragDropFlags};
-use phosphor_3d::{Camera, Transform, Material};
+use phosphor_imgui::hover_tooltip;
+use phosphor_imgui::imgui::{Ui, Drag, WindowFlags, TreeNodeFlags, DragDropFlags};
+use phosphor_3d::{Camera, Transform, Model, Material};
 use crate::SelectedEntity;
 use crate::panels::Panel;
 use super::assets::SelectedAsset;
@@ -19,6 +17,7 @@ pub fn init(world: &mut World) -> Panel {
     InspectorPanel {
       label: "\u{e1cd} Name",
       render: &inspector_name,
+      default: &name_default,
     },
   );
   panels.insert(
@@ -26,6 +25,7 @@ pub fn init(world: &mut World) -> Panel {
     InspectorPanel {
       label: "\u{f047} Transform",
       render: &inspector_transform,
+      default: &transform_default,
     },
   );
   panels.insert(
@@ -33,13 +33,15 @@ pub fn init(world: &mut World) -> Panel {
     InspectorPanel {
       label: "\u{f030} Camera",
       render: &inspector_camera,
+      default: &camera_default,
     },
   );
   panels.insert(
-    TypeIdNamed::of::<Handle<Mesh>>(),
+    TypeIdNamed::of::<Model>(),
     InspectorPanel {
-      label: "\u{f1b2} Mesh",
-      render: &inspector_mesh,
+      label: "\u{f1b2} Model",
+      render: &inspector_model,
+      default: &model_default,
     },
   );
   panels.insert(
@@ -47,27 +49,10 @@ pub fn init(world: &mut World) -> Panel {
     InspectorPanel {
       label: "\u{f5c3} Material",
       render: &inspector_material,
+      default: &material_default,
     },
   );
   world.add_resource(panels);
-  world.add_resource(HashMap::from([
-    (
-      0usize,
-      MaterialInspector {
-        name: "Color",
-        render: &material_color,
-        default: &material_color_default,
-      },
-    ),
-    (
-      1,
-      MaterialInspector {
-        name: "Texture",
-        render: &material_texture,
-        default: &material_texture_default,
-      },
-    ),
-  ]));
   Panel {
     title: "\u{f30f} Inspector",
     flags: WindowFlags::empty(),
@@ -80,6 +65,7 @@ pub fn init(world: &mut World) -> Panel {
 struct InspectorPanel {
   pub label: &'static str,
   pub render: &'static dyn Fn(&mut Box<dyn Any>, &Ui, &mut World),
+  pub default: &'static dyn Fn(&mut World) -> Box<dyn Any>,
 }
 
 fn inspector_name(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
@@ -96,6 +82,11 @@ fn inspector_name(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
     *name = Name(buf);
   }
 }
+
+fn name_default(_: &mut World) -> Box<dyn Any> {
+  Box::new(())
+}
+
 fn inspector_transform(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
   let transform: &mut Transform = t.downcast_mut().unwrap();
   Drag::new("position")
@@ -112,6 +103,10 @@ fn inspector_transform(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
     .build_array(ui, transform.scale.as_mut());
 }
 
+fn transform_default(_: &mut World) -> Box<dyn Any> {
+  Box::new(Transform::new())
+}
+
 fn inspector_camera(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
   let cam: &mut Camera = t.downcast_mut().unwrap();
   Drag::new("fov")
@@ -124,56 +119,37 @@ fn inspector_camera(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
     .build_array(ui, &mut cam.clip);
 }
 
-fn inspector_mesh(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
-  let mesh: &mut Handle<Mesh> = t.downcast_mut().unwrap();
-  asset_picker(ui, "mesh", world, mesh);
+fn camera_default(_: &mut World) -> Box<dyn Any> {
+  Box::new(Camera::new(80.0, [0.1, 100.0]))
 }
 
-struct MaterialInspector {
-  name: &'static str,
-  render: &'static dyn Fn(&Ui, &mut Material, &mut World),
-  default: &'static dyn Fn(&mut World) -> Material,
+fn inspector_model(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
+  let model: &mut Model = t.downcast_mut().unwrap();
+  asset_picker(ui, "mesh", world, &mut model.0);
+}
+
+fn model_default(world: &mut World) -> Box<dyn Any> {
+  let assets = world.get_resource::<Assets>().unwrap();
+  Box::new(Model(assets.load("res/cylinder.obj").unwrap()))
 }
 
 fn inspector_material(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
   let mat: &mut Material = t.downcast_mut().unwrap();
-  let mats = world
-    .get_resource::<HashMap<usize, MaterialInspector>>()
-    .unwrap();
-  let mat_i = mats.get(&mat.id);
-  let id = ui.push_id("##");
-  if let Some(_) = ui.begin_combo("type", mat_i.map(|m| m.name).unwrap_or("??")) {
-    for (t, i) in mats.iter() {
-      if ui.selectable_config(i.name).selected(*t == mat.id).build() {
-        *mat = (i.default)(world);
-        return;
-      }
+  let mut i = mat.id();
+  ui.combo_simple_string("type", &mut i, &["Color", "Texture"]);
+  if i != mat.id() {
+    *mat = Material::default(world, i);
+  }
+  match mat {
+    Material::Color(c) => {
+      ui.color_edit3("color", c.as_mut());
     }
+    Material::Texture(t) => asset_picker(ui, "texture", world, t),
   }
-  match mat_i {
-    Some(s) => (s.render)(ui, mat, world),
-    None => ui.text(format!("\u{f071} Unknown material '{}'.", mat.id)),
-  }
-  id.end();
 }
 
-fn material_color(ui: &Ui, mat: &mut Material, _: &mut World) {
-  let col: &mut Vec3 = mat.data.downcast_mut().unwrap();
-  ui.color_edit3("color", col.as_mut());
-}
-
-fn material_color_default(_: &mut World) -> Material {
-  Material::color(Vec3::splat(0.75))
-}
-
-fn material_texture(ui: &Ui, mat: &mut Material, world: &mut World) {
-  let tex: &mut Handle<Texture> = mat.data.downcast_mut().unwrap();
-  asset_picker(ui, "texture", world, tex);
-}
-
-fn material_texture_default(world: &mut World) -> Material {
-  let assets = world.get_resource::<Assets>().unwrap();
-  Material::texture(assets.get::<Texture>()[0].clone())
+fn material_default(world: &mut World) -> Box<dyn Any> {
+  Box::new(Material::default(world, 0))
 }
 
 fn render(world: &mut World, ui: &Ui) {
@@ -186,13 +162,23 @@ fn render(world: &mut World, ui: &Ui) {
       for (t, v) in world.get_all(e) {
         match panels.get(&t) {
           Some(panel) => {
-            for c in v {
-              if ui.collapsing_header(panel.label, TreeNodeFlags::DEFAULT_OPEN) {
+            for (i, c) in v.into_iter().enumerate() {
+              let id = ui.push_id_usize(i);
+              let mut close = true;
+              if ui.collapsing_header_with_close_button(
+                panel.label,
+                TreeNodeFlags::DEFAULT_OPEN,
+                &mut close,
+              ) {
                 hover_tooltip(ui, t.name);
                 (panel.render)(c, ui, mutate(world));
               } else {
                 hover_tooltip(ui, t.name);
               }
+              if !close {
+                world.remove_id(t, e);
+              }
+              id.end();
             }
           }
           None => ui.disabled(true, || {
@@ -202,7 +188,20 @@ fn render(world: &mut World, ui: &Ui) {
       }
       ui.separator();
       let [w, _] = ui.window_size();
-      ui.button_with_size("\u{2b} Add Component", [w, 0.0]);
+      if ui.button_with_size("\u{2b} Add Component", [w, 0.0]) {
+        ui.open_popup("addcomponent")
+      }
+      ui.popup("addcomponent", || {
+        for (t, i) in panels.iter() {
+          if *t != TypeIdNamed::of::<Name>() {
+            if ui.selectable_config(i.label).size([w, 0.0]).build() {
+              mutate(world)
+                .components
+                .push_or_insert(*t, (e, (i.default)(mutate(world))));
+            }
+          }
+        }
+      });
     }
     None => ui.text("\u{f071} No entity selected."),
   }

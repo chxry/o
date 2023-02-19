@@ -1,0 +1,65 @@
+use std::collections::HashMap;
+use std::fs::File;
+use std::any::Any;
+use serde::{Serialize, Deserialize};
+use linkme::distributed_slice;
+use log::{info, warn};
+use crate::ecs::World;
+use crate::assets::Assets;
+use crate::{TypeIdNamed, Result, HashMapExt};
+
+#[derive(Serialize, Deserialize)]
+pub struct Scene {
+  entities: HashMap<usize, Vec<(usize, Vec<u8>)>>,
+}
+
+pub struct Loader {
+  pub id: TypeIdNamed,
+  pub save: &'static (dyn Fn(&Box<dyn Any>) -> Vec<u8> + Sync),
+  pub load: &'static (dyn Fn(Vec<u8>, &mut Assets) -> Box<dyn Any> + Sync),
+}
+
+#[distributed_slice]
+pub static LOADERS: [Loader] = [..];
+
+impl Scene {
+  pub fn save(world: &World, path: &str) -> Result {
+    let mut scene = Scene {
+      entities: HashMap::new(),
+    };
+    for (t, v) in world.components.iter() {
+      if let Some(loader) = LOADERS.iter().find(|l| l.id == *t) {
+        for (i, d) in v {
+          scene
+            .entities
+            .push_or_insert(*i, (t.id(), (loader.save)(d)));
+        }
+      } else {
+        warn!("{} cannot be serialized.", t.name);
+      }
+    }
+    bincode::serialize_into(File::create(path)?, &scene)?;
+    info!("Saved scene to '{}'.", path);
+    Ok(())
+  }
+
+  pub fn load(world: &mut World, path: &str) -> Result {
+    let scene: Scene = bincode::deserialize_from(File::open(path)?)?;
+    for (_, v) in scene.entities.iter() {
+      let id = world.spawn_empty().id;
+      for (t, d) in v {
+        if let Some(loader) = LOADERS.iter().find(|l| l.id.id() == *t) {
+          world.components.push_or_insert(
+            loader.id,
+            (
+              id,
+              (loader.load)(d.clone(), world.get_resource::<Assets>().unwrap()),
+            ),
+          )
+        }
+      }
+    }
+    info!("Loaded scene from '{}'", path);
+    Ok(())
+  }
+}

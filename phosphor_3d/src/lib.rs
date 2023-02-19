@@ -1,13 +1,15 @@
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 use std::any::Any;
 use phosphor::Result;
 use phosphor::gfx::{Renderer, Shader, Texture, Mesh, Framebuffer, Vertex, gl};
-use phosphor::ecs::{World, Stage};
+use phosphor::ecs::{World, stage};
 use phosphor::math::{Vec3, Quat, EulerRot, Mat4};
-use phosphor::assets::Handle;
-use phosphor::log::warn;
+use phosphor::assets::{Assets, Handle};
+use phosphor::log::{warn, error};
+use phosphor::component;
+use serde::{Serialize, Deserialize};
 
+#[derive(Serialize, Deserialize)]
+#[component]
 pub struct Transform {
   pub position: Vec3,
   pub rotation: Vec3,
@@ -60,6 +62,8 @@ impl Transform {
   }
 }
 
+#[derive(Serialize, Deserialize)]
+#[component]
 pub struct Camera {
   pub fov: f32,
   pub clip: [f32; 2],
@@ -71,80 +75,53 @@ impl Camera {
   }
 }
 
-pub struct Material {
-  pub id: usize,
-  pub data: Box<dyn Any>,
-}
+#[derive(Serialize, Deserialize)]
+#[component]
+pub struct Model(pub Handle<Mesh>);
 
-impl Hash for Material {
-  fn hash<H: Hasher>(&self, h: &mut H) {
-    self.id.hash(h)
-  }
+#[derive(Serialize, Deserialize)]
+#[component]
+pub enum Material {
+  Color(Vec3),
+  Texture(Handle<Texture>),
 }
-
-impl PartialEq for Material {
-  fn eq(&self, other: &Self) -> bool {
-    self.id == other.id
-  }
-}
-
-impl Eq for Material {}
 
 impl Material {
-  pub fn color(col: Vec3) -> Self {
-    Self {
-      id: 0,
-      data: Box::new(col),
+  pub fn default(world: &World, id: usize) -> Self {
+    match id {
+      0 => Self::Color(Vec3::splat(0.75)),
+      1 => Self::Texture(
+        world
+          .get_resource::<Assets>()
+          .unwrap()
+          .load("res/brick.jpg")
+          .unwrap(),
+      ),
+      _ => {
+        error!("Unknown material {}.", id);
+        panic!();
+      }
     }
   }
 
-  pub fn texture(tex: Handle<Texture>) -> Self {
-    Self {
-      id: 1,
-      data: Box::new(tex),
+  pub fn id(&self) -> usize {
+    match self {
+      Self::Color(_) => 0,
+      Self::Texture(_) => 1,
     }
   }
 }
 
-struct MaterialShader {
-  shader: Shader,
-  bind: &'static dyn Fn(&Shader, &Box<dyn Any>),
-}
-
-fn material_color(shader: &Shader, data: &Box<dyn Any>) {
-  let col: &Vec3 = data.downcast_ref().unwrap();
-  shader.set_vec3("u_color", col);
-}
-
-fn material_texture(_: &Shader, data: &Box<dyn Any>) {
-  let tex: &Handle<Texture> = data.downcast_ref().unwrap();
-  tex.bind();
-}
-
-struct Sky {
-  mesh: Mesh,
-  shader: Shader,
+struct SceneRenderer {
+  sky_mesh: Mesh,
+  sky_shader: Shader,
+  texture_shader: Shader,
+  color_shader: Shader,
 }
 
 pub fn scenerenderer(world: &mut World) -> Result<()> {
-  world.add_resource(HashMap::from([
-    (
-      0usize,
-      MaterialShader {
-        shader: Shader::new("res/base.vert", "res/color.frag")?,
-        bind: &material_color,
-      },
-    ),
-    (
-      1,
-      MaterialShader {
-        shader: Shader::new("res/base.vert", "res/texture.frag")?,
-        bind: &material_texture,
-      },
-    ),
-  ]));
-  world.add_resource(Sky {
-    mesh: Mesh::new(
+  world.add_resource(SceneRenderer {
+    sky_mesh: Mesh::new(
       &[
         Vertex {
           pos: [1.0, 1.0, 0.0],
@@ -165,9 +142,11 @@ pub fn scenerenderer(world: &mut World) -> Result<()> {
       ],
       &[0, 1, 2, 1, 3, 2],
     ),
-    shader: Shader::new("res/sky.vert", "res/sky.frag")?,
+    sky_shader: Shader::new("res/sky.vert", "res/sky.frag")?,
+    color_shader: Shader::new("res/base.vert", "res/color.frag")?,
+    texture_shader: Shader::new("res/base.vert", "res/texture.frag")?,
   });
-  world.add_system(Stage::Draw, &scenerenderer_draw);
+  world.add_system(stage::DRAW, &scenerenderer_draw);
   Ok(())
 }
 
@@ -181,6 +160,7 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
     Some((e, cam)) => match e.get::<Transform>() {
       Some(cam_t) => {
         let renderer = world.get_resource::<Renderer>().unwrap();
+        let r = world.get_resource::<SceneRenderer>().unwrap();
         let (w, h) = renderer.window.get_framebuffer_size();
         let aspect = match world.get_resource::<SceneDrawOptions>() {
           Some(o) => {
@@ -194,36 +174,43 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
           }
         };
         renderer.clear(0.0, 0.0, 0.0, 1.0);
-        let mats = world
-          .get_resource::<HashMap<usize, MaterialShader>>()
-          .unwrap();
 
         let view = Mat4::look_to_rh(cam_t.position, cam_t.dir(), Vec3::Y);
         let projection =
           Mat4::perspective_rh(cam.fov.to_radians(), aspect, cam.clip[0], cam.clip[1]);
 
-        let sky = world.get_resource::<Sky>().unwrap();
-        sky.shader.bind();
-        sky.shader.set_mat4("view", &view);
-        sky.shader.set_mat4("projection", &projection);
+        r.sky_shader.bind();
+        r.sky_shader.set_mat4("view", &view);
+        r.sky_shader.set_mat4("projection", &projection);
         unsafe {
           gl::DepthMask(gl::FALSE);
-          sky.mesh.draw();
+          r.sky_mesh.draw();
           gl::DepthMask(gl::TRUE);
         }
 
-        for (e, mesh) in world.query::<Handle<Mesh>>() {
+        for (e, mesh) in world.query::<Model>() {
           match e.get::<Transform>() {
             Some(mesh_t) => {
-              let d = &mut Material::color(Vec3::X);
-              let mat = e.get::<Material>().unwrap_or(d);
-              let s = mats.get(&mat.id).unwrap();
-              s.shader.bind();
-              s.shader.set_mat4("model", &mesh_t.as_mat4());
-              s.shader.set_mat4("view", &view);
-              s.shader.set_mat4("projection", &projection);
-              (s.bind)(&s.shader, &mat.data);
-              mesh.draw();
+              let shader = match e
+                .get::<Material>()
+                .unwrap_or(&mut Material::default(world, 0))
+              {
+                Material::Color(col) => {
+                  r.color_shader.bind();
+                  r.color_shader.set_vec3("u_color", col);
+                  &r.color_shader
+                }
+                Material::Texture(tex) => {
+                  r.texture_shader.bind();
+                  tex.bind();
+                  &r.texture_shader
+                }
+              };
+
+              shader.set_mat4("model", &mesh_t.as_mat4());
+              shader.set_mat4("view", &view);
+              shader.set_mat4("projection", &projection);
+              mesh.0.draw();
             }
             None => warn!(
               "Mesh on entity {} won't be rendered (Missing Transform).",

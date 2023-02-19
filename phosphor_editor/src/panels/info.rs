@@ -1,6 +1,6 @@
 use phosphor::ecs::World;
 use phosphor::gfx::Renderer;
-use phosphor_ui::imgui::{Ui, WindowFlags, StyleVar};
+use phosphor_imgui::imgui::{Ui, WindowFlags, StyleVar};
 use crate::panels::Panel;
 
 pub fn init() -> Panel {
