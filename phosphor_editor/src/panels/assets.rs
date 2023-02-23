@@ -31,7 +31,7 @@ pub fn init(world: &mut World) -> Panel {
     fb,
     textures: HashMap::new(),
     selected_tex: Texture::empty(),
-    shader: Shader::new("res/base.vert", "res/color.frag").unwrap(),
+    shader: Shader::new("assets/base.vert", "assets/unlit.frag").unwrap(),
     spin: 0.0,
   });
   Panel {
@@ -44,12 +44,10 @@ pub fn init(world: &mut World) -> Panel {
 }
 
 fn preview_texture(ui: &Ui, _: &World, handle: &Handle<dyn Any>, size: [f32; 2]) {
-  let size = size[0].min(size[1]);
-  Image::new(
-    TextureId::new(handle.downcast::<Texture>().0 as _),
-    [size, size],
-  )
-  .build(ui);
+  let tex = handle.downcast::<Texture>();
+  let short = size[0].min(size[1]);
+  Image::new(TextureId::new(tex.id as _), [short, short]).build(ui);
+  corner_info(ui, size, format!("{}x{}", tex.width, tex.height));
 }
 
 fn preview_mesh(ui: &Ui, world: &World, handle: &Handle<dyn Any>, size: [f32; 2]) {
@@ -87,19 +85,21 @@ fn preview_mesh(ui: &Ui, world: &World, handle: &Handle<dyn Any>, size: [f32; 2]
     "projection",
     &Mat4::perspective_rh(1.0, size[0] / size[1], 0.1, 50.0),
   );
-  state.shader.set_vec3("u_color", &Vec3::splat(0.5));
-  handle.downcast::<Mesh>().draw();
+  state.shader.set_vec3("color", &Vec3::splat(0.5));
+  let mesh = handle.downcast::<Mesh>();
+  mesh.draw();
   unsafe {
     gl::LineWidth(5.0);
     gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
-    state.shader.set_vec3("u_color", &Vec3::ZERO);
+    state.shader.set_vec3("color", &Vec3::ZERO);
     handle.downcast::<Mesh>().draw();
     gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
   }
-  Image::new(TextureId::new(tex.0 as _), size)
+  Image::new(TextureId::new(tex.id as _), size)
     .uv0([0.0, 1.0])
     .uv1([1.0, 0.0])
     .build(ui);
+  corner_info(ui, size, format!("Verts: {}", mesh.len));
 }
 
 fn render(world: &mut World, ui: &Ui) {
@@ -110,7 +110,7 @@ fn render(world: &mut World, ui: &Ui) {
   let selected = world.get_resource::<SelectedAsset>().unwrap();
   for (t, v) in assets.handles.iter() {
     let mut pos = ui.cursor_pos();
-    for handle in v.0.iter() {
+    for handle in v.handles.iter() {
       let id = ui.push_id(handle.name.clone());
       if ui
         .selectable_config("##")
@@ -140,7 +140,7 @@ fn render(world: &mut World, ui: &Ui) {
         }
       }
       ui.set_cursor_pos([pos[0] + 8.0, pos[1] + 76.0]);
-      ui.text(handle.name.clone().split("/").last().unwrap());
+      ui.text(handle.name.clone());
       pos[0] += 108.0;
       ui.set_cursor_pos(pos);
       id.pop();
@@ -172,4 +172,13 @@ fn render(world: &mut World, ui: &Ui) {
       }
       None => ui.text("\u{f071} No asset selected."),
     });
+}
+
+fn corner_info(ui: &Ui, size: [f32; 2], info: String) {
+  if size[0] != size[1] {
+    let [w, h] = ui.content_region_max();
+    let [x, y] = ui.calc_text_size(info.clone());
+    ui.set_cursor_pos([w - x, h - y]);
+    ui.text(info);
+  }
 }

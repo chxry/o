@@ -3,7 +3,7 @@ use std::ffi::{CStr, CString};
 use std::sync::mpsc::Receiver;
 use glfw::{Context, WindowEvent};
 use glam::{Mat4, Vec3};
-use log::debug;
+use log::{debug, trace};
 use crate::Result;
 
 pub use gl;
@@ -76,6 +76,7 @@ pub struct Shader(pub u32);
 impl Shader {
   pub fn new(vert_path: &str, frag_path: &str) -> Result<Self> {
     unsafe {
+      trace!("Compiling shader '{}'.", vert_path);
       let vert = gl::CreateShader(gl::VERTEX_SHADER);
       let vert_src = fs::read_to_string(vert_path)?;
       gl::ShaderSource(
@@ -86,8 +87,9 @@ impl Shader {
       );
       gl::CompileShader(vert);
 
-      let frag_src = fs::read_to_string(frag_path)?;
+      trace!("Compiling shader '{}'.", frag_path);
       let frag = gl::CreateShader(gl::FRAGMENT_SHADER);
+      let frag_src = fs::read_to_string(frag_path)?;
       gl::ShaderSource(
         frag,
         1,
@@ -110,12 +112,12 @@ impl Shader {
     unsafe { gl::UseProgram(self.0) }
   }
 
-  fn get_loc(&self, name: &'static str) -> i32 {
+  fn get_loc(&self, name: &str) -> i32 {
     let c = CString::new(name).unwrap();
     unsafe { gl::GetUniformLocation(self.0, c.as_ptr() as _) }
   }
 
-  pub fn set_mat4(&self, name: &'static str, val: &Mat4) {
+  pub fn set_mat4(&self, name: &str, val: &Mat4) {
     unsafe {
       gl::ProgramUniformMatrix4fv(
         self.0 as _,
@@ -127,8 +129,14 @@ impl Shader {
     }
   }
 
-  pub fn set_vec3(&self, name: &'static str, val: &Vec3) {
+  pub fn set_vec3(&self, name: &str, val: &Vec3) {
     unsafe { gl::ProgramUniform3fv(self.0 as _, self.get_loc(name), 1, val.to_array().as_ptr()) }
+  }
+
+  pub fn set_i32(&self, name: &str, val: i32) {
+    unsafe {
+      gl::ProgramUniform1i(self.0 as _, self.get_loc(name), val);
+    }
   }
 }
 
@@ -136,6 +144,7 @@ impl Shader {
 pub struct Vertex {
   pub pos: [f32; 3],
   pub uv: [f32; 2],
+  pub normal: [f32; 3],
 }
 
 #[derive(Copy, Clone)]
@@ -157,7 +166,7 @@ impl Mesh {
       gl::BindBuffer(gl::ARRAY_BUFFER, vert_buf);
       gl::BufferData(
         gl::ARRAY_BUFFER,
-        (vertices.len() * 20) as _,
+        (vertices.len() * 32) as _,
         vertices.as_ptr() as _,
         gl::STATIC_DRAW,
       );
@@ -171,9 +180,11 @@ impl Mesh {
         gl::STATIC_DRAW,
       );
       gl::EnableVertexAttribArray(0);
-      gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 20, 0 as _);
+      gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 32, 0 as _);
       gl::EnableVertexAttribArray(1);
-      gl::VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, 20, 12 as _);
+      gl::VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, 32, 12 as _);
+      gl::EnableVertexAttribArray(2);
+      gl::VertexAttribPointer(2, 3, gl::FLOAT, gl::FALSE, 32, 20 as _);
       Self {
         vert_arr,
         vert_buf,
@@ -197,7 +208,11 @@ impl Mesh {
 }
 
 #[derive(Copy, Clone)]
-pub struct Texture(pub u32);
+pub struct Texture {
+  pub id: u32,
+  pub width: u32,
+  pub height: u32,
+}
 
 impl Texture {
   pub fn new(data: &[u8], width: u32, height: u32) -> Self {
@@ -218,7 +233,11 @@ impl Texture {
         gl::UNSIGNED_BYTE,
         data.as_ptr() as _,
       );
-      Self(tex)
+      Self {
+        id: tex,
+        width,
+        height,
+      }
     }
   }
 
@@ -240,19 +259,25 @@ impl Texture {
         gl::UNSIGNED_BYTE,
         0 as _,
       );
-      Self(tex)
+
+      Self {
+        id: tex,
+        width: 0,
+        height: 0,
+      }
     }
   }
 
-  pub fn bind(&self) {
+  pub fn bind(&self, unit: u32) {
     unsafe {
-      gl::BindTexture(gl::TEXTURE_2D, self.0);
+      gl::ActiveTexture(unit);
+      gl::BindTexture(gl::TEXTURE_2D, self.id);
     }
   }
 
-  pub fn resize(&self, width: u32, height: u32) {
+  pub fn resize(&mut self, width: u32, height: u32) {
     unsafe {
-      self.bind();
+      self.bind(gl::TEXTURE0);
       gl::TexImage2D(
         gl::TEXTURE_2D,
         0,
@@ -264,6 +289,8 @@ impl Texture {
         gl::UNSIGNED_BYTE,
         0 as _,
       );
+      self.width = width;
+      self.height = height;
     }
   }
 }
@@ -309,7 +336,7 @@ impl Framebuffer {
         gl::FRAMEBUFFER,
         gl::COLOR_ATTACHMENT0,
         gl::TEXTURE_2D,
-        tex.0,
+        tex.id,
         0,
       );
     }

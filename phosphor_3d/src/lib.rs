@@ -2,11 +2,13 @@ use std::any::Any;
 use phosphor::Result;
 use phosphor::gfx::{Renderer, Shader, Texture, Mesh, Framebuffer, Vertex, gl};
 use phosphor::ecs::{World, stage};
-use phosphor::math::{Vec3, Quat, EulerRot, Mat4};
+use phosphor::math::{Vec3, Quat, EulerRot, Mat4, Vec2};
 use phosphor::assets::{Assets, Handle};
 use phosphor::log::{warn, error};
 use phosphor::component;
 use serde::{Serialize, Deserialize};
+
+const SHADOW_RES: u32 = 4096;
 
 #[derive(Serialize, Deserialize)]
 #[component]
@@ -53,13 +55,18 @@ impl Transform {
     )
   }
 
-  pub fn dir(&self) -> Vec3 {
-    Vec3::new(
-      self.rotation.y.to_radians().cos() * self.rotation.x.to_radians().cos(),
-      self.rotation.x.to_radians().sin(),
-      self.rotation.y.to_radians().sin() * self.rotation.x.to_radians().cos(),
-    )
+  // goofy
+  pub fn euler_dir(&self) -> Vec3 {
+    euler_dir(self.rotation.x, self.rotation.y)
   }
+}
+
+fn euler_dir(yaw: f32, pitch: f32) -> Vec3 {
+  Vec3::new(
+    pitch.to_radians().cos() * yaw.to_radians().cos(),
+    yaw.to_radians().sin(),
+    pitch.to_radians().sin() * yaw.to_radians().cos(),
+  )
 }
 
 #[derive(Serialize, Deserialize)]
@@ -77,13 +84,26 @@ impl Camera {
 
 #[derive(Serialize, Deserialize)]
 #[component]
-pub struct Model(pub Handle<Mesh>);
+pub struct Model {
+  pub mesh: Handle<Mesh>,
+  pub cast_shadows: bool,
+}
+
+impl Model {
+  pub fn new(mesh: Handle<Mesh>) -> Self {
+    Model {
+      mesh,
+      cast_shadows: true,
+    }
+  }
+}
 
 #[derive(Serialize, Deserialize)]
 #[component]
 pub enum Material {
   Color(Vec3),
   Texture(Handle<Texture>),
+  Normal,
 }
 
 impl Material {
@@ -94,9 +114,10 @@ impl Material {
         world
           .get_resource::<Assets>()
           .unwrap()
-          .load("res/brick.jpg")
+          .load("brick.jpg")
           .unwrap(),
       ),
+      2 => Self::Normal,
       _ => {
         error!("Unknown material {}.", id);
         panic!();
@@ -108,43 +129,91 @@ impl Material {
     match self {
       Self::Color(_) => 0,
       Self::Texture(_) => 1,
+      Self::Normal => 2,
     }
   }
 }
 
+pub struct LightDir(pub Vec2);
+
 struct SceneRenderer {
   sky_mesh: Mesh,
   sky_shader: Shader,
-  texture_shader: Shader,
+  shadow_fb: Framebuffer,
+  shadow_tex: Texture,
+  shadow_shader: Shader,
   color_shader: Shader,
+  texture_shader: Shader,
+  normal_shader: Shader,
 }
 
 pub fn scenerenderer(world: &mut World) -> Result<()> {
+  world.add_resource(LightDir(Vec2::new(30.0, 300.0)));
+  let mut shadow_fb = Framebuffer { fb: 0, rb: 0 };
+  let mut shadow_tex = Texture {
+    id: 0,
+    width: SHADOW_RES,
+    height: SHADOW_RES,
+  };
+  unsafe {
+    gl::GenFramebuffers(1, &mut shadow_fb.fb);
+    gl::GenTextures(1, &mut shadow_tex.id);
+    gl::BindTexture(gl::TEXTURE_2D, shadow_tex.id);
+    gl::TexImage2D(
+      gl::TEXTURE_2D,
+      0,
+      gl::DEPTH_COMPONENT as _,
+      SHADOW_RES as _,
+      SHADOW_RES as _,
+      0,
+      gl::DEPTH_COMPONENT,
+      gl::FLOAT,
+      0 as _,
+    );
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
+    gl::BindFramebuffer(gl::FRAMEBUFFER, shadow_fb.fb);
+    gl::FramebufferTexture2D(
+      gl::FRAMEBUFFER,
+      gl::DEPTH_ATTACHMENT,
+      gl::TEXTURE_2D,
+      shadow_tex.id,
+      0,
+    );
+  }
   world.add_resource(SceneRenderer {
     sky_mesh: Mesh::new(
       &[
         Vertex {
           pos: [1.0, 1.0, 0.0],
           uv: [1.0, 1.0],
+          normal: [0.0, 0.0, 0.0],
         },
         Vertex {
           pos: [1.0, -1.0, 0.0],
           uv: [1.0, 0.0],
+          normal: [0.0, 0.0, 0.0],
         },
         Vertex {
           pos: [-1.0, 1.0, 0.0],
           uv: [0.0, 1.0],
+          normal: [0.0, 0.0, 0.0],
         },
         Vertex {
           pos: [-1.0, -1.0, 0.0],
           uv: [0.0, 0.0],
+          normal: [0.0, 0.0, 0.0],
         },
       ],
       &[0, 1, 2, 1, 3, 2],
     ),
-    sky_shader: Shader::new("res/sky.vert", "res/sky.frag")?,
-    color_shader: Shader::new("res/base.vert", "res/color.frag")?,
-    texture_shader: Shader::new("res/base.vert", "res/texture.frag")?,
+    sky_shader: Shader::new("assets/sky.vert", "assets/sky.frag")?,
+    shadow_fb,
+    shadow_tex,
+    shadow_shader: Shader::new("assets/shadow.vert", "assets/shadow.frag")?,
+    color_shader: Shader::new("assets/base.vert", "assets/color.frag")?,
+    texture_shader: Shader::new("assets/base.vert", "assets/texture.frag")?,
+    normal_shader: Shader::new("assets/base.vert", "assets/normal.frag")?,
   });
   world.add_system(stage::DRAW, &scenerenderer_draw);
   Ok(())
@@ -156,12 +225,32 @@ pub struct SceneDrawOptions {
 }
 
 fn scenerenderer_draw(world: &mut World) -> Result<()> {
+  let renderer = world.get_resource::<Renderer>().unwrap();
+  let (w, h) = renderer.window.get_framebuffer_size();
   match world.query::<Camera>().get(0) {
     Some((e, cam)) => match e.get::<Transform>() {
       Some(cam_t) => {
-        let renderer = world.get_resource::<Renderer>().unwrap();
         let r = world.get_resource::<SceneRenderer>().unwrap();
-        let (w, h) = renderer.window.get_framebuffer_size();
+        let light_dir = world.get_resource::<LightDir>().unwrap().0;
+        let light_dir = euler_dir(light_dir.x, light_dir.y);
+
+        r.shadow_fb.bind();
+        renderer.resize(SHADOW_RES, SHADOW_RES);
+        renderer.clear(0.0, 0.0, 0.0, 1.0);
+        let light_view = Mat4::look_at_rh(light_dir, Vec3::ZERO, Vec3::Y);
+        let light_projection = Mat4::orthographic_rh(-40.0, 40.0, -40.0, 40.0, 0.1, 50.0);
+        r.shadow_shader.bind();
+        r.shadow_shader.set_mat4("view", &light_view);
+        r.shadow_shader.set_mat4("projection", &light_projection);
+        for (e, model) in world.query::<Model>() {
+          if model.cast_shadows {
+            if let Some(model_t) = e.get::<Transform>() {
+              r.shadow_shader.set_mat4("model", &model_t.as_mat4());
+              model.mesh.draw();
+            }
+          }
+        }
+
         let aspect = match world.get_resource::<SceneDrawOptions>() {
           Some(o) => {
             o.fb.bind();
@@ -169,48 +258,59 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
             o.size[0] / o.size[1]
           }
           None => {
+            Framebuffer::DEFAULT.bind();
             renderer.resize(w as _, h as _);
             w as f32 / h as f32
           }
         };
         renderer.clear(0.0, 0.0, 0.0, 1.0);
 
-        let view = Mat4::look_to_rh(cam_t.position, cam_t.dir(), Vec3::Y);
+        let view = Mat4::look_to_rh(cam_t.position, cam_t.euler_dir(), Vec3::Y);
         let projection =
           Mat4::perspective_rh(cam.fov.to_radians(), aspect, cam.clip[0], cam.clip[1]);
 
         r.sky_shader.bind();
         r.sky_shader.set_mat4("view", &view);
         r.sky_shader.set_mat4("projection", &projection);
+        r.sky_shader.set_vec3("light_dir", &light_dir);
         unsafe {
           gl::DepthMask(gl::FALSE);
           r.sky_mesh.draw();
           gl::DepthMask(gl::TRUE);
         }
 
-        for (e, mesh) in world.query::<Model>() {
+        for (e, model) in world.query::<Model>() {
           match e.get::<Transform>() {
-            Some(mesh_t) => {
+            Some(model_t) => {
               let shader = match e
                 .get::<Material>()
                 .unwrap_or(&mut Material::default(world, 0))
               {
                 Material::Color(col) => {
                   r.color_shader.bind();
-                  r.color_shader.set_vec3("u_color", col);
+                  r.color_shader.set_vec3("color", col);
                   &r.color_shader
                 }
                 Material::Texture(tex) => {
                   r.texture_shader.bind();
-                  tex.bind();
+                  tex.bind(gl::TEXTURE0);
                   &r.texture_shader
+                }
+                Material::Normal => {
+                  r.normal_shader.bind();
+                  &r.normal_shader
                 }
               };
 
-              shader.set_mat4("model", &mesh_t.as_mat4());
+              shader.set_mat4("model", &model_t.as_mat4());
               shader.set_mat4("view", &view);
               shader.set_mat4("projection", &projection);
-              mesh.0.draw();
+              shader.set_vec3("light_dir", &light_dir);
+              shader.set_mat4("light_view", &light_view);
+              shader.set_mat4("light_projection", &light_projection);
+              r.shadow_tex.bind(gl::TEXTURE1);
+              shader.set_i32("shadow_map", 1);
+              model.mesh.draw();
             }
             None => warn!(
               "Mesh on entity {} won't be rendered (Missing Transform).",
@@ -218,12 +318,12 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
             ),
           }
         }
-        Framebuffer::DEFAULT.bind();
-        renderer.resize(w as _, h as _);
       }
       None => warn!("Scene will not be rendered (Missing camera transform)."),
     },
     None => warn!("Scene will not be rendered (Missing camera)."),
   };
+  Framebuffer::DEFAULT.bind();
+  renderer.resize(w as _, h as _);
   Ok(())
 }

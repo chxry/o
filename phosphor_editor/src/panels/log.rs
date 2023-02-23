@@ -3,7 +3,10 @@ use phosphor_imgui::imgui::{Ui, WindowFlags};
 use phosphor::log::Level;
 use crate::panels::Panel;
 
-pub fn init() -> Panel {
+struct LogLevel(Level);
+
+pub fn init(world: &mut World) -> Panel {
+  world.add_resource(LogLevel(Level::Debug));
   Panel {
     title: "\u{f4a6} Log",
     flags: WindowFlags::empty(),
@@ -13,8 +16,24 @@ pub fn init() -> Panel {
   }
 }
 
-fn render(_: &mut World, ui: &Ui) {
-  for record in ezlogger::records() {
+fn render(world: &mut World, ui: &Ui) {
+  let id = ui.push_id("shit");
+  let level = world.get_resource::<LogLevel>().unwrap();
+  let records = ezlogger::records()
+    .iter()
+    .filter(|r| level.0 >= r.level)
+    .collect::<Vec<_>>();
+  ui.set_next_item_width(128.0);
+  if let Some(_) = ui.begin_combo("Filter", level.0.as_str()) {
+    for l in Level::iter() {
+      if ui.selectable(l.as_str()) {
+        *level = LogLevel(l);
+      }
+    }
+  }
+  ui.same_line();
+  ui.text(format!("| {} messages", records.len()));
+  for record in records {
     let font = ui.push_font(ui.fonts().fonts()[1]);
     ui.set_window_font_scale(0.65);
     let (color, icon) = match record.level {
@@ -44,4 +63,5 @@ fn render(_: &mut World, ui: &Ui) {
     ));
     ui.separator();
   }
+  id.pop();
 }

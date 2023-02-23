@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::any::Any;
+use std::path::PathBuf;
 use serde::{Serialize, Deserialize};
 use linkme::distributed_slice;
-use log::{info, warn};
+use log::{info, warn, trace};
 use crate::ecs::World;
 use crate::assets::Assets;
 use crate::{TypeIdNamed, Result, HashMapExt};
@@ -23,13 +24,14 @@ pub struct Loader {
 pub static LOADERS: [Loader] = [..];
 
 impl Scene {
-  pub fn save(world: &World, path: &str) -> Result {
+  pub fn save(world: &World, path: PathBuf) -> Result {
     let mut scene = Scene {
       entities: HashMap::new(),
     };
     for (t, v) in world.components.iter() {
       if let Some(loader) = LOADERS.iter().find(|l| l.id == *t) {
         for (i, d) in v {
+          trace!("Saving '{}' on {}.", t.name, i);
           scene
             .entities
             .push_or_insert(*i, (t.id(), (loader.save)(d)));
@@ -38,17 +40,19 @@ impl Scene {
         warn!("{} cannot be serialized.", t.name);
       }
     }
-    bincode::serialize_into(File::create(path)?, &scene)?;
-    info!("Saved scene to '{}'.", path);
+    bincode::serialize_into(File::create(path.clone())?, &scene)?;
+    info!("Saved scene to '{}'.", path.display());
     Ok(())
   }
 
-  pub fn load(world: &mut World, path: &str) -> Result {
-    let scene: Scene = bincode::deserialize_from(File::open(path)?)?;
+  pub fn load(world: &mut World, path: PathBuf) -> Result {
+    let scene: Scene = bincode::deserialize_from(File::open(path.clone())?)?;
+    world.components.clear();
     for (_, v) in scene.entities.iter() {
       let id = world.spawn_empty().id;
       for (t, d) in v {
         if let Some(loader) = LOADERS.iter().find(|l| l.id.id() == *t) {
+          trace!("Loading '{}' on {}.", loader.id.name, id);
           world.components.push_or_insert(
             loader.id,
             (
@@ -59,7 +63,7 @@ impl Scene {
         }
       }
     }
-    info!("Loaded scene from '{}'", path);
+    info!("Loaded scene from '{}'.", path.display());
     Ok(())
   }
 }

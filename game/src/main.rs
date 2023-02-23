@@ -1,6 +1,5 @@
 use phosphor::{Engine, Result};
 use phosphor::ecs::{World, stage};
-use phosphor::gfx::Mesh;
 use phosphor_3d::{Transform, Camera, Model, Material, scenerenderer};
 use phosphor_imgui::{
   imgui::{Ui, Drag},
@@ -11,7 +10,7 @@ use phosphor::math::Vec3;
 use phosphor::assets::Assets;
 
 fn main() -> Result {
-  ezlogger::init(LevelFilter::Trace)?;
+  ezlogger::init(LevelFilter::Debug)?;
   Engine::new()
     .add_system(stage::START, &scenerenderer)
     .add_system(stage::START, &uirenderer)
@@ -31,16 +30,26 @@ fn start(world: &mut World) -> Result {
     )
     .insert(Camera::new(80.0, [0.1, 100.0]));
   world
-    .spawn("teapot")
+    .spawn("plane")
+    .insert(Transform::new().scale(Vec3::splat(7.5)))
+    .insert(Model::new(assets.load("plane.obj")?))
+    .insert(Material::Color(Vec3::splat(0.75)));
+  world
+    .spawn("garf")
     .insert(Transform::new().rot(Vec3::new(0.0, 90.0, 0.0)))
-    .insert(Model(assets.load::<Mesh>("res/teapot.obj")?))
-    .insert(Material::Texture(assets.load("res/brick.jpg")?));
-  phosphor::scene::Scene::save(world, "test.scene")?;
+    .insert(Model::new(assets.load("garfield.obj")?))
+    .insert(Material::Texture(assets.load("garfield.png")?));
+  world
+    .spawn("cylinder")
+    .insert(Transform::new().pos(Vec3::new(5.0, 2.0, 0.0)))
+    .insert(Model::new(assets.load("cylinder.obj")?))
+    .insert(Material::Texture(assets.load("brick.jpg")?));
+  phosphor::scene::Scene::save(world, "test.scene".into())?;
   Ok(())
 }
 
 fn draw(world: &mut World) -> Result {
-  let teapot = world.get_name("teapot").unwrap();
+  let teapot = world.get_name("garf").unwrap();
   let ui = world.get_resource::<Ui>().unwrap();
   ui.window("debug").always_auto_resize(true).build(|| {
     Drag::new("rotation")

@@ -125,18 +125,19 @@ fn camera_default(_: &mut World) -> Box<dyn Any> {
 
 fn inspector_model(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
   let model: &mut Model = t.downcast_mut().unwrap();
-  asset_picker(ui, "mesh", world, &mut model.0);
+  asset_picker(ui, "mesh", world, &mut model.mesh);
+  ui.checkbox("Cast Shadows", &mut model.cast_shadows);
 }
 
 fn model_default(world: &mut World) -> Box<dyn Any> {
   let assets = world.get_resource::<Assets>().unwrap();
-  Box::new(Model(assets.load("res/cylinder.obj").unwrap()))
+  Box::new(Model::new(assets.load("cylinder.obj").unwrap()))
 }
 
 fn inspector_material(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
   let mat: &mut Material = t.downcast_mut().unwrap();
   let mut i = mat.id();
-  ui.combo_simple_string("type", &mut i, &["Color", "Texture"]);
+  ui.combo_simple_string("type", &mut i, &["Color", "Texture", "Normal"]);
   if i != mat.id() {
     *mat = Material::default(world, i);
   }
@@ -145,6 +146,7 @@ fn inspector_material(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
       ui.color_edit3("color", c.as_mut());
     }
     Material::Texture(t) => asset_picker(ui, "texture", world, t),
+    Material::Normal => {}
   }
 }
 

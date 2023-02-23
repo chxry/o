@@ -1,25 +1,23 @@
 use std::collections::{HashMap, BTreeMap};
 use std::any::Any;
-use glfw::WindowEvent;
 use log::error;
 use serde::{Serialize, Deserialize};
 use crate::{Result, HashMapExt, TypeIdNamed, mutate, component, WORLD};
 
 pub type System = &'static dyn Fn(&mut World) -> Result;
-pub type EventHandler = &'static dyn Fn(&mut World, &WindowEvent) -> Result<()>;
 
 pub mod stage {
   pub const START: usize = 0;
   pub const PRE_DRAW: usize = 1;
   pub const DRAW: usize = 2;
   pub const POST_DRAW: usize = 3;
+  pub const EVENT: usize = 4;
 }
 
 pub struct World {
   pub components: HashMap<TypeIdNamed, Vec<(usize, Box<dyn Any>)>>,
-  resources: HashMap<TypeIdNamed, Box<dyn Any>>,
+  pub resources: HashMap<TypeIdNamed, Box<dyn Any>>,
   systems: HashMap<usize, Vec<System>>,
-  event_handlers: Vec<EventHandler>,
 }
 
 impl World {
@@ -28,7 +26,6 @@ impl World {
       components: HashMap::new(),
       resources: HashMap::new(),
       systems: HashMap::new(),
-      event_handlers: Vec::new(),
     }
   }
 
@@ -79,7 +76,7 @@ impl World {
     components
   }
 
-  pub fn get_name(&self, name: &'static str) -> Option<Entity> {
+  pub fn get_name(&self, name: &str) -> Option<Entity> {
     self
       .query::<Name>()
       .into_iter()
@@ -93,8 +90,8 @@ impl World {
     }
   }
 
-  pub fn add_resource<T: Any>(&mut self, resource: T) {
-    self
+  pub fn add_resource<T: Any>(&self, resource: T) {
+    mutate(self)
       .resources
       .insert(TypeIdNamed::of::<T>(), Box::new(resource));
   }
@@ -123,18 +120,6 @@ impl World {
         if let Err(e) = sys(mutate(self)) {
           error!("Error in system: {}", e);
         }
-      }
-    }
-  }
-
-  pub fn add_event_handler(&mut self, handler: EventHandler) {
-    self.event_handlers.push(handler);
-  }
-
-  pub fn run_event_handler(&self, event: WindowEvent) {
-    for handler in self.event_handlers.clone() {
-      if let Err(e) = handler(mutate(self), &event) {
-        error!("Error in event handler: {}", e);
       }
     }
   }

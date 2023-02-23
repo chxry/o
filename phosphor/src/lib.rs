@@ -61,7 +61,8 @@ impl Engine {
     while !renderer.window.should_close() {
       renderer.glfw.poll_events();
       for (_, event) in renderer.events.try_iter() {
-        world.run_event_handler(event);
+        world.add_resource(event);
+        world.run_system(stage::EVENT);
       }
       world.run_system(stage::PRE_DRAW);
       world.run_system(stage::DRAW);

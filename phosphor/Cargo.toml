@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 phosphor_derive = { path = "../phosphor_derive" }
 gl = "0.14"
-glfw = "0.47"
+glfw = "0.51"
 glam = { version = "0.22", features = ["serde"] }
 image = "0.24"
 obj-rs = "0.7"

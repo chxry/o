@@ -3,10 +3,9 @@ use phosphor::ecs::{World, Name, stage};
 use phosphor::gfx::{Texture, Framebuffer, Renderer};
 use phosphor::glfw::{Key, Action, CursorMode, MouseButton};
 use phosphor::math::Vec3;
-use phosphor::scene::Scene;
-use phosphor_imgui::imgui::{Ui, Image, TextureId, WindowFlags, StyleVar};
+use phosphor_imgui::imgui::{Ui, Image, TextureId, WindowFlags, StyleVar, Condition, StyleColor};
 use phosphor_3d::{Camera, Transform, SceneDrawOptions, scenerenderer};
-use crate::SelectedEntity;
+use crate::{SelectedEntity, load};
 use crate::panels::Panel;
 
 struct SceneState {
@@ -19,7 +18,7 @@ struct SceneState {
 }
 
 pub fn init(world: &mut World) -> Result<Panel> {
-  Scene::load(world, "test.scene")?;
+  load(world);
   let fb = Framebuffer::new();
   let tex = Texture::empty();
   fb.bind_tex(&tex);
@@ -66,7 +65,7 @@ fn predraw(world: &mut World) -> Result {
           renderer.window.set_cursor_mode(CursorMode::Normal);
         }
 
-        let front = cam_t.dir() * 0.15;
+        let front = cam_t.euler_dir() * 0.15;
         let right = front.cross(Vec3::Y);
         if renderer.window.get_key(Key::W) == Action::Press {
           cam_t.position += front;
@@ -90,7 +89,7 @@ fn predraw(world: &mut World) -> Result {
   }
   world.add_resource(SceneDrawOptions {
     fb: s.fb,
-    size: s.size,
+    size: [s.size[0] * 2.5, s.size[1] * 2.5],
   });
   Ok(())
 }
@@ -101,23 +100,46 @@ fn render(world: &mut World, ui: &Ui) {
   s.size = ui.window_size();
   s.focused = ui.is_window_focused();
   if s.cam {
-    Image::new(TextureId::new(s.tex.0 as _), s.size)
+    let pos = ui.cursor_screen_pos();
+    Image::new(TextureId::new(s.tex.id as _), s.size)
       .uv0([0.0, 1.0])
       .uv1([1.0, 0.0])
       .build(&ui);
-    ui.set_cursor_pos([16.0, 32.0]);
-    match selected.0 {
-      Some(e) => {
-        let (e, n) = world.get_id::<Name>(e).unwrap();
-        ui.text(format!("{}({})", n.0, e.id));
-      }
-      None => ui.text("No entity selected."),
-    };
-    ui.set_cursor_pos([16.0, 52.0]);
-    ui.text(format!("{:.1}fps", ui.io().framerate));
+    let pad = ui.push_style_var(StyleVar::WindowPadding([2.0, 2.0]));
+    let round = ui.push_style_var(StyleVar::WindowRounding(0.0));
+    ui.window("##")
+      .flags(WindowFlags::NO_DECORATION | WindowFlags::ALWAYS_AUTO_RESIZE | WindowFlags::NO_MOVE)
+      .bg_alpha(0.5)
+      .position(pos, Condition::Always)
+      .build(|| {
+        ui.set_window_font_scale(0.8);
+        match selected.0 {
+          Some(e) => {
+            let (e, n) = world.get_id::<Name>(e).unwrap();
+            ui.text(n.0.clone());
+            ui.same_line_with_spacing(0.0, 2.0);
+            ui.text_colored(
+              ui.style_color(StyleColor::ScrollbarGrabActive),
+              format!("#{}", e.id),
+            );
+          }
+          None => ui.text("No entity selected."),
+        };
+        ui.text(format!("{:.1}fps", ui.io().framerate));
+      });
+    pad.pop();
+    round.pop();
   } else {
-    ui.text("No camera :(");
+    let font = ui.push_font(ui.fonts().fonts()[1]);
+    ui.set_window_font_scale(0.65);
+    let msg = "\u{e0eb} No camera.";
+    let [w, h] = ui.window_size();
+    let [x, y] = ui.calc_text_size(msg);
+    ui.set_cursor_pos([(w - x) / 2.0, (h - y) / 2.0]);
+    ui.text(msg);
+    ui.set_window_font_scale(1.0);
+    font.pop();
   }
-  s.tex.resize(s.size[0] as _, s.size[1] as _);
-  s.fb.resize(s.size[0] as _, s.size[1] as _);
+  s.tex.resize((2.5 * s.size[0]) as _, (2.5 * s.size[1]) as _);
+  s.fb.resize((2.5 * s.size[0]) as _, (2.5 * s.size[1]) as _);
 }

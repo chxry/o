@@ -1,4 +1,5 @@
 use phosphor::ecs::{World, Name};
+use phosphor_3d::Transform;
 use phosphor_imgui::imgui::{Ui, WindowFlags};
 use crate::SelectedEntity;
 use crate::panels::Panel;
@@ -29,6 +30,6 @@ fn render(world: &mut World, ui: &Ui) {
   }
   ui.separator();
   if ui.button_with_size("\u{2b} Add Entity", [w, 0.0]) {
-    world.spawn("New");
+    world.spawn("New").insert(Transform::new());
   }
 }

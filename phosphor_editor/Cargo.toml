@@ -7,4 +7,6 @@ edition = "2021"
 phosphor = { path = "../phosphor" }
 phosphor_3d = { path = "../phosphor_3d" }
 phosphor_imgui = { path = "../phosphor_imgui" }
-ezlogger = "0.1"
+rfd = "0.11"
+# ezlogger = "0.1"
+ezlogger = { path = "../../ezlog" }
