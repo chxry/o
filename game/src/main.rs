@@ -1,6 +1,6 @@
 use phosphor::{Engine, Result};
 use phosphor::ecs::{World, stage};
-use phosphor_3d::{Transform, Camera, Model, Material, scenerenderer};
+use phosphor_3d::{Transform, Camera, Model, Material, SkySettings, scenerenderer};
 use phosphor_imgui::{
   imgui::{Ui, Drag},
   uirenderer,
@@ -56,5 +56,6 @@ fn draw(world: &mut World) -> Result {
       .speed(0.5)
       .build_array(&ui, teapot.get::<Transform>().unwrap().rotation.as_mut());
   });
+  world.get_resource::<SkySettings>().unwrap().dir.x += 1.0;
   Ok(())
 }

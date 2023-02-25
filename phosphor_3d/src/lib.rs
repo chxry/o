@@ -134,7 +134,9 @@ impl Material {
   }
 }
 
-pub struct LightDir(pub Vec2);
+pub struct SkySettings {
+  pub dir: Vec2,
+}
 
 struct SceneRenderer {
   sky_mesh: Mesh,
@@ -148,7 +150,9 @@ struct SceneRenderer {
 }
 
 pub fn scenerenderer(world: &mut World) -> Result<()> {
-  world.add_resource(LightDir(Vec2::new(30.0, 300.0)));
+  world.add_resource(SkySettings {
+    dir: Vec2::new(30.0, 300.0),
+  });
   let mut shadow_fb = Framebuffer { fb: 0, rb: 0 };
   let mut shadow_tex = Texture {
     id: 0,
@@ -231,8 +235,8 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
     Some((e, cam)) => match e.get::<Transform>() {
       Some(cam_t) => {
         let r = world.get_resource::<SceneRenderer>().unwrap();
-        let light_dir = world.get_resource::<LightDir>().unwrap().0;
-        let light_dir = euler_dir(light_dir.x, light_dir.y);
+        let sky = world.get_resource::<SkySettings>().unwrap();
+        let light_dir = euler_dir(sky.dir.x, sky.dir.y);
 
         r.shadow_fb.bind();
         renderer.resize(SHADOW_RES, SHADOW_RES);
@@ -273,6 +277,7 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
         r.sky_shader.set_mat4("view", &view);
         r.sky_shader.set_mat4("projection", &projection);
         r.sky_shader.set_vec3("light_dir", &light_dir);
+        r.sky_shader.set_f32("atmosphere_rad", 6372e3);
         unsafe {
           gl::DepthMask(gl::FALSE);
           r.sky_mesh.draw();
@@ -282,34 +287,37 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
         for (e, model) in world.query::<Model>() {
           match e.get::<Transform>() {
             Some(model_t) => {
-              let shader = match e
+              let (shader, lit) = match e
                 .get::<Material>()
                 .unwrap_or(&mut Material::default(world, 0))
               {
                 Material::Color(col) => {
                   r.color_shader.bind();
                   r.color_shader.set_vec3("color", col);
-                  &r.color_shader
+                  (&r.color_shader, true)
                 }
                 Material::Texture(tex) => {
                   r.texture_shader.bind();
-                  tex.bind(gl::TEXTURE0);
-                  &r.texture_shader
+                  tex.bind(0);
+                  (&r.texture_shader, true)
                 }
                 Material::Normal => {
                   r.normal_shader.bind();
-                  &r.normal_shader
+                  (&r.normal_shader, false)
                 }
               };
 
+              // set these only once
               shader.set_mat4("model", &model_t.as_mat4());
               shader.set_mat4("view", &view);
               shader.set_mat4("projection", &projection);
-              shader.set_vec3("light_dir", &light_dir);
-              shader.set_mat4("light_view", &light_view);
-              shader.set_mat4("light_projection", &light_projection);
-              r.shadow_tex.bind(gl::TEXTURE1);
-              shader.set_i32("shadow_map", 1);
+              if lit {
+                shader.set_vec3("light_dir", &light_dir);
+                shader.set_mat4("light_view", &light_view);
+                shader.set_mat4("light_projection", &light_projection);
+                r.shadow_tex.bind(1);
+                shader.set_i32("shadow_map", 1);
+              }
               model.mesh.draw();
             }
             None => warn!(

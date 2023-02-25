@@ -1,10 +1,13 @@
-use std::fs;
+use std::fs::{self, File};
+use std::io::BufReader;
 use std::ffi::{CStr, CString};
 use std::sync::mpsc::Receiver;
-use glfw::{Context, WindowEvent};
+use glfw::{Context, WindowHint, WindowEvent, WindowMode};
 use glam::{Mat4, Vec3};
+use image::imageops;
+use obj::{Obj, TexturedVertex};
 use log::{debug, trace};
-use crate::Result;
+use crate::{Result, asset};
 
 pub use gl;
 
@@ -19,13 +22,11 @@ pub struct Renderer {
 impl Renderer {
   pub fn new() -> Result<Self> {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
-    glfw.window_hint(glfw::WindowHint::ContextVersion(3, 3));
-    glfw.window_hint(glfw::WindowHint::OpenGlProfile(
-      glfw::OpenGlProfileHint::Core,
-    ));
+    glfw.window_hint(WindowHint::ContextVersion(3, 3));
+    glfw.window_hint(WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
     let (mut window, events) = glfw
-      .create_window(1400, 800, "phosphor", glfw::WindowMode::Windowed)
+      .create_window(1400, 800, "phosphor", WindowMode::Windowed)
       .unwrap();
     window.make_current();
     window.set_all_polling(true);
@@ -138,6 +139,12 @@ impl Shader {
       gl::ProgramUniform1i(self.0 as _, self.get_loc(name), val);
     }
   }
+
+  pub fn set_f32(&self, name: &str, val: f32) {
+    unsafe {
+      gl::ProgramUniform1f(self.0 as _, self.get_loc(name), val);
+    }
+  }
 }
 
 #[repr(C)]
@@ -148,11 +155,28 @@ pub struct Vertex {
 }
 
 #[derive(Copy, Clone)]
+#[asset(load_mesh)]
 pub struct Mesh {
   pub vert_arr: u32,
   pub vert_buf: u32,
   pub idx_buf: u32,
   pub len: u32,
+}
+
+fn load_mesh(path: &str) -> Result<Mesh> {
+  let obj: Obj<TexturedVertex> = obj::load_obj(BufReader::new(File::open(path)?))?;
+  Ok(Mesh::new(
+    &obj
+      .vertices
+      .iter()
+      .map(|v| Vertex {
+        pos: v.position,
+        uv: [v.texture[0], v.texture[1]],
+        normal: v.normal,
+      })
+      .collect::<Vec<_>>(),
+    &obj.indices,
+  ))
 }
 
 impl Mesh {
@@ -208,10 +232,17 @@ impl Mesh {
 }
 
 #[derive(Copy, Clone)]
+#[asset(load_tex)]
 pub struct Texture {
   pub id: u32,
   pub width: u32,
   pub height: u32,
+}
+
+fn load_tex(path: &str) -> Result<Texture> {
+  let mut img = image::open(path)?.to_rgba8();
+  imageops::flip_vertical_in_place(&mut img);
+  Ok(Texture::new(img.as_raw(), img.width(), img.height()))
 }
 
 impl Texture {
@@ -270,14 +301,14 @@ impl Texture {
 
   pub fn bind(&self, unit: u32) {
     unsafe {
-      gl::ActiveTexture(unit);
+      gl::ActiveTexture(gl::TEXTURE0 + unit);
       gl::BindTexture(gl::TEXTURE_2D, self.id);
     }
   }
 
   pub fn resize(&mut self, width: u32, height: u32) {
     unsafe {
-      self.bind(gl::TEXTURE0);
+      self.bind(0);
       gl::TexImage2D(
         gl::TEXTURE_2D,
         0,

@@ -1,76 +1,34 @@
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::ops::Deref;
-use std::collections::HashMap;
 use std::any::Any;
-use std::io::BufReader;
-use std::fs::File;
-use obj::{Obj, TexturedVertex};
-use image::imageops::flip_vertical_in_place;
 use log::{error, trace};
+use linkme::distributed_slice;
 use serde::{Serialize, Deserialize, Deserializer};
-use crate::gfx::{Texture, Mesh, Vertex};
 use crate::{Result, TypeIdNamed, WORLD};
 
 pub struct AssetLoader {
-  loader: &'static dyn Fn(&str) -> Result<Rc<dyn Any>>,
-  pub handles: Vec<Handle<dyn Any>>,
+  pub id: TypeIdNamed,
+  pub loader: &'static (dyn Fn(&str) -> Result<Rc<dyn Any>> + Sync),
 }
+
+#[distributed_slice]
+pub static ASSET_LOADERS: [AssetLoader] = [..];
 
 pub struct Assets {
-  pub handles: HashMap<TypeIdNamed, AssetLoader>,
-}
-
-fn load_tex(path: &str) -> Result<Rc<dyn Any>> {
-  let mut img = image::open(path)?.to_rgba8();
-  flip_vertical_in_place(&mut img);
-  Ok(Rc::new(Texture::new(
-    img.as_raw(),
-    img.width(),
-    img.height(),
-  )))
-}
-
-fn load_mesh(path: &str) -> Result<Rc<dyn Any>> {
-  let obj: Obj<TexturedVertex> = obj::load_obj(BufReader::new(File::open(path)?))?;
-  Ok(Rc::new(Mesh::new(
-    &obj
-      .vertices
-      .iter()
-      .map(|v| Vertex {
-        pos: v.position,
-        uv: [v.texture[0], v.texture[1]],
-        normal: v.normal,
-      })
-      .collect::<Vec<_>>(),
-    &obj.indices,
-  )))
+  pub handles: HashMap<TypeIdNamed, Vec<Handle<dyn Any>>>,
 }
 
 impl Assets {
   pub fn new() -> Self {
     Self {
-      handles: HashMap::from([
-        (
-          TypeIdNamed::of::<Texture>(),
-          AssetLoader {
-            loader: &load_tex,
-            handles: vec![],
-          },
-        ),
-        (
-          TypeIdNamed::of::<Mesh>(),
-          AssetLoader {
-            loader: &load_mesh,
-            handles: vec![],
-          },
-        ),
-      ]),
+      handles: HashMap::new(),
     }
   }
 
   pub fn load<T: Any>(&mut self, path: &str) -> Result<Handle<T>> {
     let t = TypeIdNamed::of::<T>();
-    let loader = match self.handles.get_mut(&t) {
+    let loader = match ASSET_LOADERS.iter().find(|l| l.id == t) {
       Some(s) => s,
       None => {
         error!("Unknown asset type '{}'.", t.name);
@@ -78,14 +36,18 @@ impl Assets {
       }
     };
     trace!("Loading '{}' from '{}'.", t.name, path);
-    Ok(match loader.handles.iter().find(|h| h.name == path) {
+    if !self.handles.contains_key(&t) {
+      self.handles.insert(t, vec![]);
+    }
+    let v = self.handles.get_mut(&t).unwrap();
+    Ok(match v.iter().find(|h| h.name == path) {
       Some(h) => h.downcast(),
       None => {
         let h = Handle {
           name: path.to_string(),
           data: (loader.loader)(&format!("assets/{}", path)).unwrap(),
         };
-        loader.handles.push(h.clone());
+        v.push(h.clone());
         h.downcast()
       }
     })
@@ -93,7 +55,7 @@ impl Assets {
 
   pub fn get<T: Any>(&self) -> Vec<Handle<T>> {
     match self.handles.get(&TypeIdNamed::of::<T>()) {
-      Some(l) => l.handles.iter().map(|h| h.downcast()).collect(),
+      Some(l) => l.iter().map(|h| h.downcast()).collect(),
       None => vec![],
     }
   }

@@ -21,7 +21,7 @@ pub struct Loader {
 }
 
 #[distributed_slice]
-pub static LOADERS: [Loader] = [..];
+pub static COMPONENT_LOADERS: [Loader] = [..];
 
 impl Scene {
   pub fn save(world: &World, path: PathBuf) -> Result {
@@ -29,7 +29,7 @@ impl Scene {
       entities: HashMap::new(),
     };
     for (t, v) in world.components.iter() {
-      if let Some(loader) = LOADERS.iter().find(|l| l.id == *t) {
+      if let Some(loader) = COMPONENT_LOADERS.iter().find(|l| l.id == *t) {
         for (i, d) in v {
           trace!("Saving '{}' on {}.", t.name, i);
           scene
@@ -51,7 +51,7 @@ impl Scene {
     for (_, v) in scene.entities.iter() {
       let id = world.spawn_empty().id;
       for (t, d) in v {
-        if let Some(loader) = LOADERS.iter().find(|l| l.id.id() == *t) {
+        if let Some(loader) = COMPONENT_LOADERS.iter().find(|l| l.id.id() == *t) {
           trace!("Loading '{}' on {}.", loader.id.name, id);
           world.components.push_or_insert(
             loader.id,

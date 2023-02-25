@@ -110,7 +110,7 @@ fn render(world: &mut World, ui: &Ui) {
   let selected = world.get_resource::<SelectedAsset>().unwrap();
   for (t, v) in assets.handles.iter() {
     let mut pos = ui.cursor_pos();
-    for handle in v.handles.iter() {
+    for handle in v {
       let id = ui.push_id(handle.name.clone());
       if ui
         .selectable_config("##")

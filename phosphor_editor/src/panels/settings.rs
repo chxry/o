@@ -48,7 +48,7 @@ fn render(world: &mut World, ui: &Ui) {
   pad.pop();
   space.pop();
   ui.same_line_with_spacing(0.0, 0.0);
-  let pad = ui.push_style_var(StyleVar::WindowPadding([16.0, 16.0]));
+  let pad = ui.push_style_var(StyleVar::WindowPadding([8.0, 8.0]));
   ui.child_window("r").border(true).build(|| match pane {
     SettingsPane::Appearance => unsafe {
       static mut THEME: usize = 0; // too bored for a resource

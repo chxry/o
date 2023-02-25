@@ -1,5 +1,5 @@
 use phosphor::ecs::World;
-use phosphor_3d::LightDir;
+use phosphor_3d::SkySettings;
 use phosphor_imgui::imgui::{Ui, WindowFlags, Drag};
 use crate::panels::Panel;
 
@@ -14,9 +14,9 @@ pub fn init() -> Panel {
 }
 
 fn render(world: &mut World, ui: &Ui) {
-  let light_dir = world.get_resource::<LightDir>().unwrap().0.as_mut();
+  let sky = world.get_resource::<SkySettings>().unwrap();
   Drag::new("light dir")
     .speed(0.5)
     .display_format("%g")
-    .build_array(&ui, light_dir.as_mut());
+    .build_array(&ui, sky.dir.as_mut());
 }
