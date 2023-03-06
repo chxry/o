@@ -1,11 +1,11 @@
 [package]
-name = "game"
+name = "phosphor_fmod"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 phosphor = { path = "../phosphor" }
 phosphor_3d = { path = "../phosphor_3d" }
-phosphor_imgui = { path = "../phosphor_imgui" }
-phosphor_fmod = { path = "../phosphor_fmod" }
-ezlogger = "0.1"
+libfmod = "2.2.605"
+serde = { version = "1.0", features = ["derive"] }
+linkme = "0.3"

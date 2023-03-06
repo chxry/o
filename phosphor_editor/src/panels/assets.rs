@@ -8,7 +8,7 @@ use phosphor::math::{Mat4, Vec3, Quat};
 use phosphor_imgui::imgui::{Ui, WindowFlags, Image, TextureId};
 use crate::panels::Panel;
 
-type Preview = &'static dyn Fn(&Ui, &World, &Handle<dyn Any>, [f32; 2]);
+type Preview = fn(&Ui, &World, &Handle<dyn Any>, [f32; 2]);
 
 pub struct SelectedAsset(pub Option<(TypeIdNamed, Handle<dyn Any>)>);
 
@@ -22,8 +22,8 @@ struct MeshPreviewState {
 
 pub fn init(world: &mut World) -> Panel {
   let mut previews = HashMap::new();
-  previews.insert(TypeIdNamed::of::<Texture>(), &preview_texture as Preview);
-  previews.insert(TypeIdNamed::of::<Mesh>(), &preview_mesh as Preview);
+  previews.insert(TypeIdNamed::of::<Texture>(), preview_texture as Preview);
+  previews.insert(TypeIdNamed::of::<Mesh>(), preview_mesh);
   world.add_resource(previews);
   world.add_resource(SelectedAsset(None));
   let fb = Framebuffer::new();
@@ -39,7 +39,7 @@ pub fn init(world: &mut World) -> Panel {
     flags: WindowFlags::empty(),
     vars: &[],
     open: true,
-    render: &render,
+    render,
   }
 }
 

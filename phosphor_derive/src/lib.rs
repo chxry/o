@@ -32,7 +32,7 @@ pub fn component(_: TokenStream, input: TokenStream) -> TokenStream {
     let var = format_ident!("{}_LOADER", ident);
     quote! {
       #[allow(non_snake_case)]
-      fn #save(data: &Box<dyn Any>) -> Vec<u8>{
+      fn #save(data: &Box<dyn std::any::Any>) -> Vec<u8>{
         #phosphor::bincode::serialize(&data.downcast_ref::<#ident>().unwrap()).unwrap()
       }
       #[allow(non_snake_case)]
@@ -43,8 +43,8 @@ pub fn component(_: TokenStream, input: TokenStream) -> TokenStream {
       #[#phosphor::linkme::distributed_slice(#phosphor::scene::COMPONENT_LOADERS)]
       static #var: #phosphor::scene::Loader = #phosphor::scene::Loader {
         id: #phosphor::TypeIdNamed::of::<#ident>(),
-        save: &#save,
-        load: &#load
+        save: #save,
+        load: #load
       };
       #input
     }
@@ -61,15 +61,15 @@ pub fn asset(args: TokenStream, input: TokenStream) -> TokenStream {
       let new_func = format_ident!("_{}", func);
       let var = format_ident!("{}_LOADER", ident);
       quote! {
-        fn #new_func(path: &str) -> #phosphor::Result<std::rc::Rc<dyn std::any::Any>> {
-          Ok(std::rc::Rc::new(#func(path)?))
+        fn #new_func(world: &mut World, path: &str) -> #phosphor::Result<std::rc::Rc<dyn std::any::Any>> {
+          Ok(std::rc::Rc::new(#func(world, path)?))
         }
 
         #[allow(non_upper_case_globals)]
         #[#phosphor::linkme::distributed_slice(#phosphor::assets::ASSET_LOADERS)]
         static #var: #phosphor::assets::AssetLoader = #phosphor::assets::AssetLoader {
           id: #phosphor::TypeIdNamed::of::<#ident>(),
-          loader: &#new_func,
+          loader: #new_func,
         };
         #input
       }

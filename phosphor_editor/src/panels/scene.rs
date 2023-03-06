@@ -4,7 +4,7 @@ use phosphor::gfx::{Texture, Framebuffer, Renderer};
 use phosphor::glfw::{Key, Action, CursorMode, MouseButton};
 use phosphor::math::Vec3;
 use phosphor_imgui::imgui::{Ui, Image, TextureId, WindowFlags, StyleVar, Condition, StyleColor};
-use phosphor_3d::{Camera, Transform, SceneDrawOptions, scenerenderer};
+use phosphor_3d::{Camera, Transform, SceneDrawOptions, scenerenderer_plugin};
 use crate::{SelectedEntity, load};
 use crate::panels::Panel;
 
@@ -30,14 +30,14 @@ pub fn init(world: &mut World) -> Result<Panel> {
     tex,
     last_pos: (0.0, 0.0),
   });
-  scenerenderer(world)?;
-  world.add_system(stage::PRE_DRAW, &predraw);
+  scenerenderer_plugin(world)?;
+  world.add_system(stage::PRE_DRAW, predraw);
   Ok(Panel {
     title: "\u{e1c3} Scene",
     flags: WindowFlags::NO_SCROLLBAR | WindowFlags::NO_SCROLL_WITH_MOUSE,
     vars: &[StyleVar::WindowPadding([0.0, 0.0])],
     open: true,
-    render: &render,
+    render,
   })
 }
 
@@ -48,7 +48,7 @@ fn predraw(world: &mut World) -> Result {
     match world.query::<Camera>().first() {
       Some((e, _)) => {
         s.cam = true;
-        let cam_t = e.get::<Transform>().unwrap();
+        let cam_t = e.get_one::<Transform>().unwrap();
 
         if renderer.window.get_mouse_button(MouseButton::Button1) == Action::Press {
           let pos = renderer.window.get_cursor_pos();
@@ -115,8 +115,7 @@ fn render(world: &mut World, ui: &Ui) {
         ui.set_window_font_scale(0.8);
         match selected.0 {
           Some(e) => {
-            let (e, n) = world.get_id::<Name>(e).unwrap();
-            ui.text(n.0.clone());
+            ui.text(e.get_one::<Name>().unwrap().0.clone());
             ui.same_line_with_spacing(0.0, 2.0);
             ui.text_colored(
               ui.style_color(StyleColor::ScrollbarGrabActive),

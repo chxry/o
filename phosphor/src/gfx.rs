@@ -7,6 +7,7 @@ use glam::{Mat4, Vec3};
 use image::imageops;
 use obj::{Obj, TexturedVertex};
 use log::{debug, trace};
+use crate::ecs::World;
 use crate::{Result, asset};
 
 pub use gl;
@@ -45,7 +46,7 @@ impl Renderer {
       );
       let version = CStr::from_ptr(gl::GetString(gl::VERSION) as _).to_str()?;
       let renderer = CStr::from_ptr(gl::GetString(gl::RENDERER) as _).to_str()?;
-      debug!("Created OpenGL {} renderer on {}.", version, renderer);
+      debug!("Created OpenGL {} renderer on '{}'.", version, renderer);
       Ok(Self {
         glfw,
         window,
@@ -163,8 +164,8 @@ pub struct Mesh {
   pub len: u32,
 }
 
-fn load_mesh(path: &str) -> Result<Mesh> {
-  let obj: Obj<TexturedVertex> = obj::load_obj(BufReader::new(File::open(path)?))?;
+fn load_mesh(_: &mut World, path: &str) -> Result<Mesh> {
+  let obj: Obj<TexturedVertex, u32> = obj::load_obj(BufReader::new(File::open(path)?))?;
   Ok(Mesh::new(
     &obj
       .vertices
@@ -180,7 +181,7 @@ fn load_mesh(path: &str) -> Result<Mesh> {
 }
 
 impl Mesh {
-  pub fn new(vertices: &[Vertex], indices: &[u16]) -> Self {
+  pub fn new(vertices: &[Vertex], indices: &[u32]) -> Self {
     unsafe {
       let mut vert_arr = 0;
       gl::GenVertexArrays(1, &mut vert_arr);
@@ -199,7 +200,7 @@ impl Mesh {
       gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, idx_buf);
       gl::BufferData(
         gl::ELEMENT_ARRAY_BUFFER,
-        (indices.len() * 2) as _,
+        (indices.len() * 4) as _,
         indices.as_ptr() as _,
         gl::STATIC_DRAW,
       );
@@ -224,7 +225,7 @@ impl Mesh {
       gl::DrawElements(
         gl::TRIANGLES,
         self.len as _,
-        gl::UNSIGNED_SHORT,
+        gl::UNSIGNED_INT,
         std::ptr::null(),
       );
     }
@@ -239,7 +240,7 @@ pub struct Texture {
   pub height: u32,
 }
 
-fn load_tex(path: &str) -> Result<Texture> {
+fn load_tex(_: &mut World, path: &str) -> Result<Texture> {
   let mut img = image::open(path)?.to_rgba8();
   imageops::flip_vertical_in_place(&mut img);
   Ok(Texture::new(img.as_raw(), img.width(), img.height()))

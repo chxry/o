@@ -16,8 +16,8 @@ pub struct Scene {
 
 pub struct Loader {
   pub id: TypeIdNamed,
-  pub save: &'static (dyn Fn(&Box<dyn Any>) -> Vec<u8> + Sync),
-  pub load: &'static (dyn Fn(Vec<u8>, &mut Assets) -> Box<dyn Any> + Sync),
+  pub save: fn(&Box<dyn Any>) -> Vec<u8>,
+  pub load: fn(Vec<u8>, &mut Assets) -> Box<dyn Any>,
 }
 
 #[distributed_slice]

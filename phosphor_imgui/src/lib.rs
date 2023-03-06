@@ -1,4 +1,4 @@
-use std::{fs, path};
+use std::fs;
 use std::time::Instant;
 use imgui::{
   Context, Ui, Style, StyleColor, ConfigFlags, MouseCursor, BackendFlags, Key, FontConfig,
@@ -17,14 +17,12 @@ pub use imgui;
 
 pub struct UiRendererOptions {
   pub docking: bool,
-  pub ini_path: Option<&'static str>,
   pub fonts: &'static [&'static [(&'static str, f32, Option<&'static [u32]>)]],
 }
 
 impl UiRendererOptions {
   const DEFAULT: Self = Self {
     docking: false,
-    ini_path: None,
     fonts: &[&[("assets/roboto.ttf", 16.0, None)]],
   };
 }
@@ -37,15 +35,15 @@ struct UiRenderer {
   last_frame: Instant,
 }
 
-pub fn uirenderer(world: &mut World) -> Result<()> {
+pub fn imgui_plugin(world: &mut World) -> Result {
   let renderer = world.get_resource::<Renderer>().unwrap();
   let mut ctx = Context::create();
-  debug!("Created imgui {} context.", imgui::dear_imgui_version());
+  debug!("Created ImGui {} context.", imgui::dear_imgui_version());
   let options = match world.get_resource::<UiRendererOptions>() {
     Some(o) => o,
     None => &UiRendererOptions::DEFAULT,
   };
-  ctx.set_ini_filename(options.ini_path.map(|s| path::PathBuf::from(s)));
+  ctx.set_ini_filename(None);
   let io = ctx.io_mut();
   if options.docking {
     io.config_flags |= ConfigFlags::DOCKING_ENABLE;
@@ -130,13 +128,13 @@ pub fn uirenderer(world: &mut World) -> Result<()> {
     idx_buf,
     last_frame: Instant::now(),
   });
-  world.add_system(stage::PRE_DRAW, &uirenderer_predraw);
-  world.add_system(stage::POST_DRAW, &uirenderer_draw);
-  world.add_system(stage::EVENT, &uirenderer_event);
+  world.add_system(stage::PRE_DRAW, imgui_predraw);
+  world.add_system(stage::POST_DRAW, imgui_draw);
+  world.add_system(stage::EVENT, imgui_event);
   Ok(())
 }
 
-fn uirenderer_event(world: &mut World) -> Result<()> {
+fn imgui_event(world: &mut World) -> Result {
   let ctx = world.get_resource::<Context>().unwrap();
   let io = ctx.io_mut();
   match *world.get_resource::<WindowEvent>().unwrap() {
@@ -182,7 +180,7 @@ fn uirenderer_event(world: &mut World) -> Result<()> {
   Ok(())
 }
 
-fn uirenderer_predraw(world: &mut World) -> Result<()> {
+fn imgui_predraw(world: &mut World) -> Result {
   let renderer = world.get_resource::<Renderer>().unwrap();
   let ctx = world.get_resource::<Context>().unwrap();
   let io = ctx.io();
@@ -205,7 +203,7 @@ fn uirenderer_predraw(world: &mut World) -> Result<()> {
   Ok(())
 }
 
-fn uirenderer_draw(world: &mut World) -> Result<()> {
+fn imgui_draw(world: &mut World) -> Result {
   if let Some(ui) = world.take_resource::<imgui::Ui>() {
     let renderer = world.get_resource::<Renderer>().unwrap();
     let r = world.get_resource::<UiRenderer>().unwrap();

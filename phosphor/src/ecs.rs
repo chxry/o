@@ -1,23 +1,25 @@
 use std::collections::{HashMap, BTreeMap};
-use std::any::Any;
-use log::error;
+use std::any::{Any, type_name};
+use log::{error, trace};
 use serde::{Serialize, Deserialize};
-use crate::{Result, HashMapExt, TypeIdNamed, mutate, component, WORLD};
+use crate::{Result, HashMapExt, TypeIdNamed, component, WORLD};
 
-pub type System = &'static dyn Fn(&mut World) -> Result;
+pub trait System = Fn(&mut World) -> Result;
 
 pub mod stage {
-  pub const START: usize = 0;
-  pub const PRE_DRAW: usize = 1;
-  pub const DRAW: usize = 2;
-  pub const POST_DRAW: usize = 3;
-  pub const EVENT: usize = 4;
+  pub const INIT: usize = 0;
+  pub const START: usize = 1;
+  pub const PRE_DRAW: usize = 2;
+  pub const DRAW: usize = 3;
+  pub const POST_DRAW: usize = 4;
+  pub const EVENT: usize = 5;
 }
 
 pub struct World {
   pub components: HashMap<TypeIdNamed, Vec<(usize, Box<dyn Any>)>>,
-  pub resources: HashMap<TypeIdNamed, Box<dyn Any>>,
-  systems: HashMap<usize, Vec<System>>,
+  resources: HashMap<TypeIdNamed, Box<dyn Any>>,
+  systems: HashMap<usize, Vec<(&'static dyn System, &'static str)>>,
+  count: usize,
 }
 
 impl World {
@@ -26,7 +28,12 @@ impl World {
       components: HashMap::new(),
       resources: HashMap::new(),
       systems: HashMap::new(),
+      count: 0,
     }
+  }
+
+  fn g(&self) -> &'static mut Self {
+    unsafe { WORLD.get_mut().unwrap() }
   }
 
   pub fn spawn(&self, name: &str) -> Entity {
@@ -34,71 +41,45 @@ impl World {
   }
 
   pub(crate) fn spawn_empty(&self) -> Entity {
-    unsafe {
-      static mut COUNTER: usize = 0;
-      COUNTER += 1;
-      Entity { id: COUNTER }
-    }
+    self.g().count += 1;
+    Entity { id: self.g().count }
   }
 
   pub fn query<T: Any>(&self) -> Vec<(Entity, &mut T)> {
-    match self.components.get(&TypeIdNamed::of::<T>()) {
+    match self.g().components.get_mut(&TypeIdNamed::of::<T>()) {
       Some(v) => v
-        .iter()
-        .map(|(e, b)| (Entity { id: *e }, mutate(b.downcast_ref().unwrap())))
+        .iter_mut()
+        .map(|(e, b)| (Entity { id: *e }, b.downcast_mut().unwrap()))
         .collect(),
       None => vec![],
     }
   }
 
-  pub fn get_id<T: Any>(&self, id: usize) -> Option<(Entity, &mut T)> {
-    match self.components.get(&TypeIdNamed::of::<T>()) {
-      Some(v) => v
-        .iter()
-        .find(|(e, _)| *e == id)
-        .map(|s| (Entity { id: s.0 }, mutate(s.1.downcast_ref().unwrap()))),
-      None => None,
-    }
-  }
-
-  pub fn get_all(&self, id: usize) -> BTreeMap<TypeIdNamed, Vec<&mut Box<dyn Any>>> {
-    let mut components = BTreeMap::new();
-    for (t, v) in self.components.iter() {
-      let v: Vec<&mut Box<dyn Any>> = v
-        .iter()
-        .filter(|i| i.0 == id)
-        .map(|c| mutate(&c.1))
-        .collect();
-      if !v.is_empty() {
-        components.insert(*t, v);
-      }
-    }
-    components
-  }
-
   pub fn get_name(&self, name: &str) -> Option<Entity> {
     self
       .query::<Name>()
-      .into_iter()
+      .iter_mut()
       .find(|f| f.1 .0 == name)
       .map(|m| m.0)
   }
 
+  //fix
   pub fn remove_id(&self, t: TypeIdNamed, id: usize) {
-    if let Some(v) = self.components.get(&t) {
-      mutate(v).retain(|c| c.0 != id);
+    if let Some(v) = self.g().components.get_mut(&t) {
+      v.retain(|c| c.0 != id);
     }
   }
 
   pub fn add_resource<T: Any>(&self, resource: T) {
-    mutate(self)
+    self
+      .g()
       .resources
       .insert(TypeIdNamed::of::<T>(), Box::new(resource));
   }
 
   pub fn get_resource<T: Any>(&self) -> Option<&mut T> {
-    match self.resources.get(&TypeIdNamed::of::<T>()) {
-      Some(r) => Some(mutate(r.downcast_ref().unwrap())),
+    match self.g().resources.get_mut(&TypeIdNamed::of::<T>()) {
+      Some(r) => Some(r.downcast_mut().unwrap()),
       None => None,
     }
   }
@@ -110,15 +91,18 @@ impl World {
       .map(|r| *r.downcast().unwrap())
   }
 
-  pub fn add_system(&mut self, stage: usize, sys: System) {
-    self.systems.push_or_insert(stage, sys);
+  pub fn add_system<S: System + 'static>(&mut self, stage: usize, sys: S) {
+    self
+      .systems
+      .push_or_insert(stage, (Box::leak(Box::new(sys)), type_name::<S>()));
   }
 
   pub fn run_system(&self, stage: usize) {
     if let Some(vec) = self.systems.get(&stage) {
-      for sys in vec.clone() {
-        if let Err(e) = sys(mutate(self)) {
-          error!("Error in system: {}", e);
+      for (sys, name) in vec.clone() {
+        trace!("Running system '{}'.", name);
+        if let Err(e) = sys(self.g()) {
+          error!("Error in system '{}': {}", name, e);
         }
       }
     }
@@ -129,11 +113,11 @@ impl World {
 #[component]
 pub struct Name(pub String);
 
+#[derive(Clone, Copy)]
 pub struct Entity {
   pub id: usize,
 }
 
-// move stuff into here
 impl Entity {
   pub fn insert<T: Any>(self, component: T) -> Self {
     unsafe {
@@ -146,7 +130,40 @@ impl Entity {
     self
   }
 
-  pub fn get<T: Any>(&self) -> Option<&mut T> {
-    unsafe { WORLD.get().unwrap().get_id(self.id).map(|c| c.1) }
+  pub fn get<T: Any>(&self) -> Vec<&mut T> {
+    unsafe {
+      match WORLD
+        .get_mut()
+        .unwrap()
+        .components
+        .get_mut(&TypeIdNamed::of::<T>())
+      {
+        Some(v) => v
+          .iter_mut()
+          .filter_map(|(e, c)| (*e == self.id).then(|| c.downcast_mut().unwrap()))
+          .collect(),
+        None => vec![],
+      }
+    }
+  }
+
+  pub fn get_one<T: Any>(&self) -> Option<&mut T> {
+    self.get().pop()
+  }
+
+  pub fn get_all(&self) -> BTreeMap<TypeIdNamed, Vec<&mut Box<dyn Any>>> {
+    let mut components = BTreeMap::new();
+    unsafe {
+      for (t, v) in WORLD.get_mut().unwrap().components.iter_mut() {
+        let v: Vec<&mut Box<dyn Any>> = v
+          .iter_mut()
+          .filter_map(|(e, c)| (*e == self.id).then(|| c))
+          .collect();
+        if !v.is_empty() {
+          components.insert(*t, v);
+        }
+      }
+    }
+    components
   }
 }

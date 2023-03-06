@@ -1,16 +1,19 @@
+#![feature(is_some_and)]
 mod panels;
 
-use phosphor::{Engine, Result, mutate};
-use phosphor::ecs::{World, stage};
+use std::fs;
+use phosphor::{Engine, Result};
+use phosphor::ecs::{World, Entity, stage};
 use phosphor::scene::Scene;
 use phosphor::log::{LevelFilter, error};
 use phosphor::glfw::{WindowEvent, Key, Modifiers};
-use phosphor_imgui::{uirenderer, UiRendererOptions};
-use phosphor_imgui::imgui::{Ui, StyleStackToken};
+use phosphor_imgui::{imgui_plugin, UiRendererOptions};
+use phosphor_imgui::imgui::{Ui, StyleStackToken, Context};
+use phosphor_fmod::{FmodOptions, fmod_plugin};
 use rfd::FileDialog;
 use crate::panels::{Panel, setup_panels};
 
-pub struct SelectedEntity(Option<usize>);
+pub struct SelectedEntity(Option<Entity>);
 pub struct SceneName(String);
 
 const TEXT: &str = concat!(
@@ -20,12 +23,11 @@ const TEXT: &str = concat!(
   env!("CARGO_PKG_VERSION")
 );
 
-fn main() -> Result<()> {
+fn main() -> Result {
   ezlogger::init(LevelFilter::Debug)?;
   Engine::new()
     .add_resource(UiRendererOptions {
       docking: true,
-      ini_path: Some("phosphor_editor/ui.ini"),
       fonts: &[
         &[
           ("assets/roboto.ttf", 16.0, None),
@@ -37,15 +39,35 @@ fn main() -> Result<()> {
         ],
       ],
     })
+    .add_resource(FmodOptions {
+      play_on_start: false,
+    })
+    .add_resource(Theme("default.ini".to_string()))
     .add_resource(SelectedEntity(None))
-    .add_system(stage::START, &uirenderer)
-    .add_system(stage::START, &setup_panels)
-    .add_system(stage::DRAW, &draw_ui)
-    .add_system(stage::EVENT, &shortcut_handler)
+    .add_system(stage::INIT, imgui_plugin)
+    .add_system(stage::INIT, fmod_plugin)
+    .add_system(stage::INIT, setup_panels)
+    .add_system(stage::DRAW, draw_ui)
+    .add_system(stage::POST_DRAW, theme_change)
+    .add_system(stage::EVENT, shortcut_handler)
     .run()
 }
 
-fn draw_ui(world: &mut World) -> Result<()> {
+struct Theme(String);
+
+fn theme_change(world: &mut World) -> Result {
+  if let Some(theme) = world.take_resource::<Theme>() {
+    world
+      .get_resource::<Context>()
+      .unwrap()
+      .load_ini_settings(&fs::read_to_string(
+        "phosphor_editor/layouts/".to_string() + &theme.0,
+      )?);
+  }
+  Ok(())
+}
+
+fn draw_ui(world: &mut World) -> Result {
   let ui = world.get_resource::<Ui>().unwrap();
   let panels = world.get_resource::<Vec<Panel>>().unwrap();
   let scene_name = world.get_resource::<SceneName>().unwrap().0.clone();
@@ -58,11 +80,24 @@ fn draw_ui(world: &mut World) -> Result<()> {
         load(mutate(world));
       }
     });
-    ui.menu("View", || {
+    ui.menu("Windows", || {
       for panel in panels.iter_mut() {
         ui.menu_item_config(panel.title)
           .build_with_ref(&mut panel.open);
       }
+    });
+    ui.menu("Layout", || {
+      for p in fs::read_dir("phosphor_editor/layouts").unwrap() {
+        let name = p.unwrap().file_name().into_string().unwrap();
+        if ui.menu_item(name.clone()) {
+          world.add_resource(Theme(name));
+        }
+      }
+      // if ui.button("save") {
+      //   let mut s = String::new();
+      //   world.get_resource::<Context>().unwrap().save_ini_settings(&mut s);
+      //   fs::write("layout", s).unwrap();
+      // }
     });
     let [w, _] = ui.window_size();
     let [tx, _] = ui.calc_text_size(scene_name.clone());
@@ -89,7 +124,7 @@ fn draw_ui(world: &mut World) -> Result<()> {
   Ok(())
 }
 
-fn shortcut_handler(world: &mut World) -> Result<()> {
+fn shortcut_handler(world: &mut World) -> Result {
   const M: Modifiers = if cfg!(target_os = "macos") {
     Modifiers::Super
   } else {
@@ -130,4 +165,9 @@ fn shortcut(s: &str) -> String {
   }
   .to_string()
     + s
+}
+
+// not very safe, use refcell or something
+pub fn mutate<T>(t: &T) -> &mut T {
+  unsafe { &mut *(t as *const T as *mut T) }
 }

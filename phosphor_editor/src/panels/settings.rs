@@ -1,6 +1,7 @@
 use phosphor::ecs::World;
 use phosphor::gfx::Renderer;
 use phosphor_imgui::imgui::{Context, Ui, WindowFlags, StyleVar, dear_imgui_version};
+use phosphor_fmod::FmodContext;
 use crate::panels::Panel;
 
 #[derive(PartialEq, Eq)]
@@ -27,7 +28,7 @@ pub fn init(world: &mut World) -> Panel {
     flags: WindowFlags::empty(),
     vars: &[StyleVar::WindowPadding([0.0, 0.0])],
     open: false,
-    render: &render,
+    render,
   }
 }
 
@@ -70,13 +71,15 @@ fn render(world: &mut World, ui: &Ui) {
       font.pop();
       ui.text("github.com/chxry/phosphor");
       let [w, _] = ui.window_size();
-      ui.same_line_with_pos(w - 52.0);
+      ui.same_line_with_pos(w - 40.0);
       ui.text(env!("CARGO_PKG_VERSION"));
       ui.separator();
       let renderer = world.get_resource::<Renderer>().unwrap();
       item(ui, "opengl ver", renderer.version);
       item(ui, "glfw ver", &phosphor::glfw::get_version_string());
       item(ui, "imgui ver", dear_imgui_version());
+      let fmod = world.get_resource::<FmodContext>().unwrap();
+      item(ui, "fmod ver", &fmod.ver);
       item(ui, "gpu", renderer.renderer);
     }
   });

@@ -5,11 +5,12 @@ use std::any::Any;
 use log::{error, trace};
 use linkme::distributed_slice;
 use serde::{Serialize, Deserialize, Deserializer};
+use crate::ecs::World;
 use crate::{Result, TypeIdNamed, WORLD};
 
 pub struct AssetLoader {
   pub id: TypeIdNamed,
-  pub loader: &'static (dyn Fn(&str) -> Result<Rc<dyn Any>> + Sync),
+  pub loader: fn(&mut World, &str) -> Result<Rc<dyn Any>>,
 }
 
 #[distributed_slice]
@@ -45,7 +46,10 @@ impl Assets {
       None => {
         let h = Handle {
           name: path.to_string(),
-          data: (loader.loader)(&format!("assets/{}", path)).unwrap(),
+          data: (loader.loader)(
+            unsafe { WORLD.get_mut().unwrap() },
+            &format!("assets/{}", path),
+          )?,
         };
         v.push(h.clone());
         h.downcast()

@@ -1,5 +1,6 @@
 #![feature(const_type_id)]
 #![feature(const_type_name)]
+#![feature(trait_alias)]
 pub mod gfx;
 pub mod ecs;
 pub mod assets;
@@ -25,7 +26,6 @@ pub use linkme;
 
 pub type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-// use this instead of hacky pointer tricks
 static mut WORLD: OnceCell<World> = OnceCell::new();
 
 pub struct Engine;
@@ -45,7 +45,7 @@ impl Engine {
     self
   }
 
-  pub fn add_system(self, stage: usize, sys: System) -> Self {
+  pub fn add_system<S: System + 'static>(self, stage: usize, sys: S) -> Self {
     unsafe {
       WORLD.get_mut().unwrap().add_system(stage, sys);
     }
@@ -57,6 +57,7 @@ impl Engine {
     world.add_resource(Assets::new());
     world.add_resource(Renderer::new()?);
     let renderer = world.get_resource::<Renderer>().unwrap();
+    world.run_system(stage::INIT);
     world.run_system(stage::START);
     while !renderer.window.should_close() {
       renderer.glfw.poll_events();
@@ -129,9 +130,4 @@ impl Ord for TypeIdNamed {
   fn cmp(&self, other: &Self) -> Ordering {
     self.id.cmp(&other.id)
   }
-}
-
-// not very safe, use refcell or something
-pub fn mutate<T>(t: &T) -> &mut T {
-  unsafe { &mut *(t as *const T as *mut T) }
 }

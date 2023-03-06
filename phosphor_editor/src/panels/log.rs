@@ -12,7 +12,7 @@ pub fn init(world: &mut World) -> Panel {
     flags: WindowFlags::empty(),
     vars: &[],
     open: true,
-    render: &render,
+    render,
   }
 }
 

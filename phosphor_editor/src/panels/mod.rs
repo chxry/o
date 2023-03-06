@@ -15,11 +15,11 @@ pub struct Panel {
   pub flags: WindowFlags,
   pub vars: &'static [StyleVar],
   pub open: bool,
-  pub render: &'static dyn Fn(&mut World, &Ui),
+  pub render: fn(&mut World, &Ui),
 }
 
 // use linkme for this
-pub fn setup_panels(world: &mut World) -> Result<()> {
+pub fn setup_panels(world: &mut World) -> Result {
   let scene = scene::init(world)?;
   let outline = outline::init();
   let environment = environment::init();

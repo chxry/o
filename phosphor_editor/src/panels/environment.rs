@@ -9,7 +9,7 @@ pub fn init() -> Panel {
     flags: WindowFlags::empty(),
     vars: &[],
     open: true,
-    render: &render,
+    render,
   }
 }
 

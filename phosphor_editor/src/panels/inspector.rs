@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::any::Any;
-use phosphor::{TypeIdNamed, HashMapExt, mutate};
+use phosphor::{TypeIdNamed, HashMapExt};
 use phosphor::ecs::{World, Name};
 use phosphor::assets::{Handle, Assets};
 use phosphor_imgui::hover_tooltip;
 use phosphor_imgui::imgui::{Ui, Drag, WindowFlags, TreeNodeFlags, DragDropFlags};
 use phosphor_3d::{Camera, Transform, Model, Material};
-use crate::SelectedEntity;
+use phosphor_fmod::AudioSource;
+use crate::{SelectedEntity, mutate};
 use crate::panels::Panel;
 use super::assets::SelectedAsset;
 
@@ -16,40 +17,48 @@ pub fn init(world: &mut World) -> Panel {
     TypeIdNamed::of::<Name>(),
     InspectorPanel {
       label: "\u{e1cd} Name",
-      render: &inspector_name,
-      default: &name_default,
+      render: inspector_name,
+      default: name_default,
     },
   );
   panels.insert(
     TypeIdNamed::of::<Transform>(),
     InspectorPanel {
       label: "\u{f047} Transform",
-      render: &inspector_transform,
-      default: &transform_default,
+      render: inspector_transform,
+      default: transform_default,
     },
   );
   panels.insert(
     TypeIdNamed::of::<Camera>(),
     InspectorPanel {
       label: "\u{f030} Camera",
-      render: &inspector_camera,
-      default: &camera_default,
+      render: inspector_camera,
+      default: camera_default,
     },
   );
   panels.insert(
     TypeIdNamed::of::<Model>(),
     InspectorPanel {
       label: "\u{f1b2} Model",
-      render: &inspector_model,
-      default: &model_default,
+      render: inspector_model,
+      default: model_default,
     },
   );
   panels.insert(
     TypeIdNamed::of::<Material>(),
     InspectorPanel {
       label: "\u{f5c3} Material",
-      render: &inspector_material,
-      default: &material_default,
+      render: inspector_material,
+      default: material_default,
+    },
+  );
+  panels.insert(
+    TypeIdNamed::of::<AudioSource>(),
+    InspectorPanel {
+      label: "\u{f028} Audio Source",
+      render: inspector_audiosource,
+      default: audiosource_default,
     },
   );
   world.add_resource(panels);
@@ -58,14 +67,14 @@ pub fn init(world: &mut World) -> Panel {
     flags: WindowFlags::empty(),
     vars: &[],
     open: true,
-    render: &render,
+    render,
   }
 }
 
 struct InspectorPanel {
   pub label: &'static str,
-  pub render: &'static dyn Fn(&mut Box<dyn Any>, &Ui, &mut World),
-  pub default: &'static dyn Fn(&mut World) -> Box<dyn Any>,
+  pub render: fn(&mut Box<dyn Any>, &Ui, &mut World),
+  pub default: fn(&mut World) -> Box<dyn Any>,
 }
 
 fn inspector_name(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
@@ -89,15 +98,15 @@ fn name_default(_: &mut World) -> Box<dyn Any> {
 
 fn inspector_transform(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
   let transform: &mut Transform = t.downcast_mut().unwrap();
-  Drag::new("position")
+  Drag::new("Position")
     .speed(0.05)
     .display_format("%g")
     .build_array(ui, transform.position.as_mut());
-  Drag::new("rotation")
+  Drag::new("Rotation")
     .speed(0.5)
     .display_format("%g")
     .build_array(ui, transform.rotation.as_mut());
-  Drag::new("scale")
+  Drag::new("Scale")
     .speed(0.05)
     .display_format("%g")
     .build_array(ui, transform.scale.as_mut());
@@ -109,11 +118,11 @@ fn transform_default(_: &mut World) -> Box<dyn Any> {
 
 fn inspector_camera(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
   let cam: &mut Camera = t.downcast_mut().unwrap();
-  Drag::new("fov")
+  Drag::new("FOV")
     .display_format("%g°")
     .range(10.0, 180.0)
     .build(ui, &mut cam.fov);
-  Drag::new("clip")
+  Drag::new("Clip")
     .speed(0.05)
     .display_format("%g")
     .build_array(ui, &mut cam.clip);
@@ -125,8 +134,9 @@ fn camera_default(_: &mut World) -> Box<dyn Any> {
 
 fn inspector_model(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
   let model: &mut Model = t.downcast_mut().unwrap();
-  asset_picker(ui, "mesh", world, &mut model.mesh);
+  asset_picker(ui, "Mesh", world, &mut model.mesh);
   ui.checkbox("Cast Shadows", &mut model.cast_shadows);
+  ui.checkbox("Wireframe", &mut model.wireframe);
 }
 
 fn model_default(world: &mut World) -> Box<dyn Any> {
@@ -137,21 +147,33 @@ fn model_default(world: &mut World) -> Box<dyn Any> {
 fn inspector_material(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
   let mat: &mut Material = t.downcast_mut().unwrap();
   let mut i = mat.id();
-  ui.combo_simple_string("type", &mut i, &["Color", "Texture", "Normal"]);
+  ui.combo_simple_string("Type", &mut i, &["Color", "Texture", "Normal"]);
   if i != mat.id() {
     *mat = Material::default(world, i);
   }
   match mat {
     Material::Color(c) => {
-      ui.color_edit3("color", c.as_mut());
+      ui.color_edit3("Color", c.as_mut());
     }
-    Material::Texture(t) => asset_picker(ui, "texture", world, t),
+    Material::Texture(t) => asset_picker(ui, "Texture", world, t),
     Material::Normal => {}
   }
 }
 
 fn material_default(world: &mut World) -> Box<dyn Any> {
   Box::new(Material::default(world, 0))
+}
+
+fn inspector_audiosource(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
+  let audio_source: &mut AudioSource = t.downcast_mut().unwrap();
+  asset_picker(ui, "Sound", world, &mut audio_source.sound);
+  ui.slider("Pitch", 0.1, 10.0, &mut audio_source.pitch);
+  ui.checkbox("Play on start", &mut audio_source.play_on_start);
+}
+
+fn audiosource_default(world: &mut World) -> Box<dyn Any> {
+  let assets = world.get_resource::<Assets>().unwrap();
+  Box::new(AudioSource::new(assets.load("portal-radio.mp3").unwrap()))
 }
 
 fn render(world: &mut World, ui: &Ui) {
@@ -161,10 +183,10 @@ fn render(world: &mut World, ui: &Ui) {
         .get_resource::<HashMap<TypeIdNamed, InspectorPanel>>()
         .unwrap();
 
-      for (t, v) in world.get_all(e) {
+      for (t, mut v) in e.get_all() {
         match panels.get(&t) {
           Some(panel) => {
-            for (i, c) in v.into_iter().enumerate() {
+            for (i, c) in v.iter_mut().enumerate() {
               let id = ui.push_id_usize(i);
               let mut close = true;
               if ui.collapsing_header_with_close_button(
@@ -178,7 +200,7 @@ fn render(world: &mut World, ui: &Ui) {
                 hover_tooltip(ui, t.name);
               }
               if !close {
-                world.remove_id(t, e);
+                world.remove_id(t, e.id);
               }
               id.end();
             }
@@ -199,7 +221,7 @@ fn render(world: &mut World, ui: &Ui) {
             if ui.selectable_config(i.label).size([w, 0.0]).build() {
               mutate(world)
                 .components
-                .push_or_insert(*t, (e, (i.default)(mutate(world))));
+                .push_or_insert(*t, (e.id, (i.default)(mutate(world))));
             }
           }
         }

@@ -10,7 +10,7 @@ pub fn init() -> Panel {
     flags: WindowFlags::empty(),
     vars: &[],
     open: true,
-    render: &render,
+    render,
   }
 }
 
@@ -21,10 +21,10 @@ fn render(world: &mut World, ui: &Ui) {
     let id = ui.push_id_usize(e.id);
     if ui
       .selectable_config(n.0.clone())
-      .selected(e.id == selected.0.unwrap_or_default())
+      .selected(selected.0.is_some_and(|s| s.id == e.id))
       .build()
     {
-      *selected = SelectedEntity(Some(e.id));
+      *selected = SelectedEntity(Some(e));
     }
     id.end();
   }

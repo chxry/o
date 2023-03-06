@@ -1,4 +1,3 @@
-use std::any::Any;
 use phosphor::Result;
 use phosphor::gfx::{Renderer, Shader, Texture, Mesh, Framebuffer, Vertex, gl};
 use phosphor::ecs::{World, stage};
@@ -87,6 +86,7 @@ impl Camera {
 pub struct Model {
   pub mesh: Handle<Mesh>,
   pub cast_shadows: bool,
+  pub wireframe: bool,
 }
 
 impl Model {
@@ -94,6 +94,7 @@ impl Model {
     Model {
       mesh,
       cast_shadows: true,
+      wireframe: false,
     }
   }
 }
@@ -149,7 +150,7 @@ struct SceneRenderer {
   normal_shader: Shader,
 }
 
-pub fn scenerenderer(world: &mut World) -> Result<()> {
+pub fn scenerenderer_plugin(world: &mut World) -> Result {
   world.add_resource(SkySettings {
     dir: Vec2::new(30.0, 300.0),
   });
@@ -219,7 +220,7 @@ pub fn scenerenderer(world: &mut World) -> Result<()> {
     texture_shader: Shader::new("assets/base.vert", "assets/texture.frag")?,
     normal_shader: Shader::new("assets/base.vert", "assets/normal.frag")?,
   });
-  world.add_system(stage::DRAW, &scenerenderer_draw);
+  world.add_system(stage::DRAW, scenerenderer_draw);
   Ok(())
 }
 
@@ -228,11 +229,11 @@ pub struct SceneDrawOptions {
   pub size: [f32; 2],
 }
 
-fn scenerenderer_draw(world: &mut World) -> Result<()> {
+fn scenerenderer_draw(world: &mut World) -> Result {
   let renderer = world.get_resource::<Renderer>().unwrap();
   let (w, h) = renderer.window.get_framebuffer_size();
   match world.query::<Camera>().get(0) {
-    Some((e, cam)) => match e.get::<Transform>() {
+    Some((e, cam)) => match e.get_one::<Transform>() {
       Some(cam_t) => {
         let r = world.get_resource::<SceneRenderer>().unwrap();
         let sky = world.get_resource::<SkySettings>().unwrap();
@@ -248,7 +249,7 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
         r.shadow_shader.set_mat4("projection", &light_projection);
         for (e, model) in world.query::<Model>() {
           if model.cast_shadows {
-            if let Some(model_t) = e.get::<Transform>() {
+            if let Some(model_t) = e.get_one::<Transform>() {
               r.shadow_shader.set_mat4("model", &model_t.as_mat4());
               model.mesh.draw();
             }
@@ -285,10 +286,10 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
         }
 
         for (e, model) in world.query::<Model>() {
-          match e.get::<Transform>() {
+          match e.get_one::<Transform>() {
             Some(model_t) => {
               let (shader, lit) = match e
-                .get::<Material>()
+                .get_one::<Material>()
                 .unwrap_or(&mut Material::default(world, 0))
               {
                 Material::Color(col) => {
@@ -318,6 +319,12 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
                 r.shadow_tex.bind(1);
                 shader.set_i32("shadow_map", 1);
               }
+              unsafe {
+                gl::PolygonMode(
+                  gl::FRONT_AND_BACK,
+                  if model.wireframe { gl::LINE } else { gl::FILL },
+                );
+              }
               model.mesh.draw();
             }
             None => warn!(
@@ -331,6 +338,9 @@ fn scenerenderer_draw(world: &mut World) -> Result<()> {
     },
     None => warn!("Scene will not be rendered (Missing camera)."),
   };
+  unsafe {
+    gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
+  }
   Framebuffer::DEFAULT.bind();
   renderer.resize(w as _, h as _);
   Ok(())

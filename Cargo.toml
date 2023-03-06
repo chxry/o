@@ -1,2 +1,2 @@
 [workspace]
-members = ["phosphor", "phosphor_derive", "phosphor_3d", "phosphor_imgui", "phosphor_editor", "game"]
+members = ["phosphor", "phosphor_derive", "phosphor_3d", "phosphor_imgui", "phosphor_fmod", "phosphor_editor", "game"]
