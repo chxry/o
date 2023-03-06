@@ -15,6 +15,7 @@ use crate::panels::{Panel, setup_panels};
 
 pub struct SelectedEntity(Option<Entity>);
 pub struct SceneName(String);
+struct Layout(String);
 
 const TEXT: &str = concat!(
   "\u{f5d3} ",
@@ -42,26 +43,24 @@ fn main() -> Result {
     .add_resource(FmodOptions {
       play_on_start: false,
     })
-    .add_resource(Theme("default.ini".to_string()))
     .add_resource(SelectedEntity(None))
+    .add_resource(Layout("default.ini".to_string()))
     .add_system(stage::INIT, imgui_plugin)
     .add_system(stage::INIT, fmod_plugin)
     .add_system(stage::INIT, setup_panels)
     .add_system(stage::DRAW, draw_ui)
-    .add_system(stage::POST_DRAW, theme_change)
+    .add_system(stage::POST_DRAW, layout_change)
     .add_system(stage::EVENT, shortcut_handler)
     .run()
 }
 
-struct Theme(String);
-
-fn theme_change(world: &mut World) -> Result {
-  if let Some(theme) = world.take_resource::<Theme>() {
+fn layout_change(world: &mut World) -> Result {
+  if let Some(layout) = world.take_resource::<Layout>() {
     world
       .get_resource::<Context>()
       .unwrap()
       .load_ini_settings(&fs::read_to_string(
-        "phosphor_editor/layouts/".to_string() + &theme.0,
+        "phosphor_editor/layouts/".to_string() + &layout.0,
       )?);
   }
   Ok(())
@@ -90,7 +89,7 @@ fn draw_ui(world: &mut World) -> Result {
       for p in fs::read_dir("phosphor_editor/layouts").unwrap() {
         let name = p.unwrap().file_name().into_string().unwrap();
         if ui.menu_item(name.clone()) {
-          world.add_resource(Theme(name));
+          world.add_resource(Layout(name));
         }
       }
       // if ui.button("save") {
