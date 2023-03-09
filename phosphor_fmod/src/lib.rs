@@ -77,9 +77,9 @@ fn fmod_predraw(world: &mut World) -> Result {
   if let Some((e, _)) = world.query::<Camera>().get(0) {
     if let Some(cam_t) = e.get_one::<Transform>() {
       let fmod = world.get_resource::<FmodContext>().unwrap();
-      let dir = cam_t.euler_dir();
-      // let up = dir.cross(Vec3::Y.cross(dir)).normalize();
-      let up = dir.cross(Vec3::Y).normalize();
+      let dir = cam_t.dir();
+      let up = dir.cross(Vec3::Y.cross(dir)).normalize();
+      // let up = dir.cross(Vec3::Y).normalize();
       // debug!("{} {}", dir, up);
       // debug!(
       //   "{} {} {}",

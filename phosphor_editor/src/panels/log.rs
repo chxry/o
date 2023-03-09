@@ -17,7 +17,7 @@ pub fn init(world: &mut World) -> Panel {
 }
 
 fn render(world: &mut World, ui: &Ui) {
-  let id = ui.push_id("shit");
+  let id = ui.push_id("##");
   let level = world.get_resource::<LogLevel>().unwrap();
   let records = ezlogger::records()
     .iter()

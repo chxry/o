@@ -3,7 +3,7 @@ use phosphor::ecs::{World, Name, stage};
 use phosphor::gfx::{Texture, Framebuffer, Renderer};
 use phosphor::glfw::{Key, Action, CursorMode, MouseButton};
 use phosphor::math::Vec3;
-use phosphor_imgui::imgui::{Ui, Image, TextureId, WindowFlags, StyleVar, Condition, StyleColor};
+use phosphor_imgui::imgui::{Ui, Image, TextureId, WindowFlags, StyleVar, Condition};
 use phosphor_3d::{Camera, Transform, SceneDrawOptions, scenerenderer_plugin};
 use crate::{SelectedEntity, load};
 use crate::panels::Panel;
@@ -65,7 +65,7 @@ fn predraw(world: &mut World) -> Result {
           renderer.window.set_cursor_mode(CursorMode::Normal);
         }
 
-        let front = cam_t.euler_dir() * 0.15;
+        let front = cam_t.dir() * 0.15;
         let right = front.cross(Vec3::Y);
         if renderer.window.get_key(Key::W) == Action::Press {
           cam_t.position += front;
@@ -113,17 +113,10 @@ fn render(world: &mut World, ui: &Ui) {
       .position(pos, Condition::Always)
       .build(|| {
         ui.set_window_font_scale(0.8);
-        match selected.0 {
-          Some(e) => {
-            ui.text(e.get_one::<Name>().unwrap().0.clone());
-            ui.same_line_with_spacing(0.0, 2.0);
-            ui.text_colored(
-              ui.style_color(StyleColor::ScrollbarGrabActive),
-              format!("#{}", e.id),
-            );
-          }
-          None => ui.text("No entity selected."),
-        };
+        ui.text(match selected.0 {
+          Some(e) => e.get_one::<Name>().unwrap().0.clone(),
+          None => "No entity selected.".to_string(),
+        });
         ui.text(format!("{:.1}fps", ui.io().framerate));
       });
     pad.pop();

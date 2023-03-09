@@ -17,7 +17,7 @@ pub struct SelectedEntity(Option<Entity>);
 pub struct SceneName(String);
 struct Layout(String);
 
-const TEXT: &str = concat!(
+const VER: &str = concat!(
   "\u{f5d3} ",
   env!("CARGO_PKG_NAME"),
   " ",
@@ -44,6 +44,7 @@ fn main() -> Result {
       play_on_start: false,
     })
     .add_resource(SelectedEntity(None))
+    .add_resource(SceneName("".to_string()))
     .add_resource(Layout("default.ini".to_string()))
     .add_system(stage::INIT, imgui_plugin)
     .add_system(stage::INIT, fmod_plugin)
@@ -102,9 +103,9 @@ fn draw_ui(world: &mut World) -> Result {
     let [tx, _] = ui.calc_text_size(scene_name.clone());
     ui.same_line_with_pos((w - tx) / 2.0);
     ui.text_disabled(scene_name);
-    let [tx, _] = ui.calc_text_size(TEXT);
+    let [tx, _] = ui.calc_text_size(VER);
     ui.same_line_with_pos(w - tx - 16.0);
-    ui.text_disabled(TEXT);
+    ui.text_disabled(VER);
   });
   for panel in panels {
     if panel.open {
@@ -150,10 +151,11 @@ fn save(world: &mut World) {
 fn load(world: &mut World) {
   if let Some(p) = FileDialog::new().pick_file() {
     world.add_resource(SceneName(p.display().to_string()));
+    world.add_resource(SelectedEntity(None));
     if let Err(e) = Scene::load(world, p.clone()) {
       error!("Couldnt load '{}'. {}", p.display(), e);
     }
-  }
+  };
 }
 
 fn shortcut(s: &str) -> String {

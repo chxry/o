@@ -1,6 +1,6 @@
 use phosphor::{Engine, Result};
 use phosphor::ecs::{World, stage};
-use phosphor_3d::{Transform, Camera, Model, Material, SkySettings, scenerenderer_plugin};
+use phosphor_3d::{Transform, Camera, Model, Material, Light, SkySettings, scenerenderer_plugin};
 use phosphor_imgui::{
   imgui::{Ui, Drag},
   imgui_plugin,
@@ -34,21 +34,48 @@ fn start(world: &mut World) -> Result {
     .insert(Camera::new(80.0, [0.1, 100.0]));
   world
     .spawn("plane")
-    .insert(Transform::new().scale(Vec3::splat(7.5)))
+    .insert(Transform::new().scale(Vec3::splat(10.0)))
     .insert(Model::new(assets.load("plane.obj")?))
-    .insert(Material::Color(Vec3::splat(0.75)));
+    .insert(Material::Color {
+      color: Vec3::splat(0.75),
+      spec: 0.5,
+    });
   world
     .spawn("garf")
     .insert(Transform::new().rot(Vec3::new(0.0, 90.0, 0.0)))
     .insert(Model::new(assets.load("garfield.obj")?))
-    .insert(Material::Texture(assets.load("garfield.png")?))
+    .insert(Material::Texture {
+      tex: assets.load("garfield.png")?,
+      spec: 0.5,
+    })
     .insert(AudioSource::new(assets.load("portal-radio.mp3")?));
   world
     .spawn("cylinder")
     .insert(Transform::new().pos(Vec3::new(5.0, 2.0, 0.0)))
     .insert(Model::new(assets.load("cylinder.obj")?))
-    .insert(Material::Texture(assets.load("brick.jpg")?));
+    .insert(Material::Texture {
+      tex: assets.load("brick.jpg")?,
+      spec: 0.5,
+    });
+  insert_light(world, "red", Vec3::X, (2.0, -2.0))?;
+  insert_light(world, "green", Vec3::Y, (0.0, -2.0))?;
+  insert_light(world, "blue", Vec3::Z, (1.0, -4.0))?;
   Scene::save(world, "test.scene".into())?;
+  Ok(())
+}
+
+fn insert_light(world: &mut World, name: &str, col: Vec3, pos: (f32, f32)) -> Result {
+  world
+    .spawn(name)
+    .insert(
+      Transform::new()
+        .pos(Vec3::new(pos.0, 1.5, pos.1))
+        .scale(Vec3::splat(0.1)),
+    )
+    .insert(Light::new(col).strength(1.25))
+    .insert(Model::new(
+      world.get_resource::<Assets>().unwrap().load("sphere.obj")?,
+    ));
   Ok(())
 }
 

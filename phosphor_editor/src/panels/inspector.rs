@@ -3,9 +3,10 @@ use std::any::Any;
 use phosphor::{TypeIdNamed, HashMapExt};
 use phosphor::ecs::{World, Name};
 use phosphor::assets::{Handle, Assets};
+use phosphor::math::Vec3;
 use phosphor_imgui::hover_tooltip;
 use phosphor_imgui::imgui::{Ui, Drag, WindowFlags, TreeNodeFlags, DragDropFlags};
-use phosphor_3d::{Camera, Transform, Model, Material};
+use phosphor_3d::{Camera, Transform, Model, Material, Light};
 use phosphor_fmod::AudioSource;
 use crate::{SelectedEntity, mutate};
 use crate::panels::Panel;
@@ -59,6 +60,14 @@ pub fn init(world: &mut World) -> Panel {
       label: "\u{f028} Audio Source",
       render: inspector_audiosource,
       default: audiosource_default,
+    },
+  );
+  panels.insert(
+    TypeIdNamed::of::<Light>(),
+    InspectorPanel {
+      label: "\u{f672} Light",
+      render: inspector_light,
+      default: light_default,
     },
   );
   world.add_resource(panels);
@@ -152,10 +161,14 @@ fn inspector_material(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
     *mat = Material::default(world, i);
   }
   match mat {
-    Material::Color(c) => {
-      ui.color_edit3("Color", c.as_mut());
+    Material::Color { color, spec } => {
+      ui.color_edit3("Color", color.as_mut());
+      ui.slider("Specular", 0.0, 1.0, spec);
     }
-    Material::Texture(t) => asset_picker(ui, "Texture", world, t),
+    Material::Texture { tex, spec } => {
+      asset_picker(ui, "Texture", world, tex);
+      ui.slider("Specular", 0.0, 1.0, spec);
+    }
     Material::Normal => {}
   }
 }
@@ -174,6 +187,16 @@ fn inspector_audiosource(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
 fn audiosource_default(world: &mut World) -> Box<dyn Any> {
   let assets = world.get_resource::<Assets>().unwrap();
   Box::new(AudioSource::new(assets.load("portal-radio.mp3").unwrap()))
+}
+
+fn inspector_light(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
+  let light: &mut Light = t.downcast_mut().unwrap();
+  ui.color_edit3("Color", light.color.as_mut());
+  ui.slider("Strength", 0.1, 5.0, &mut light.strength);
+}
+
+fn light_default(_: &mut World) -> Box<dyn Any> {
+  Box::new(Light::new(Vec3::ONE))
 }
 
 fn render(world: &mut World, ui: &Ui) {

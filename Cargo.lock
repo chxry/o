@@ -794,6 +794,7 @@ dependencies = [
  "image",
  "linkme",
  "log",
+ "nanorand",
  "obj-rs",
  "once_cell",
  "phosphor_derive",

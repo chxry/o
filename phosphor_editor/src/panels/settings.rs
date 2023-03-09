@@ -1,3 +1,4 @@
+use std::env::consts;
 use phosphor::ecs::World;
 use phosphor::gfx::Renderer;
 use phosphor_imgui::imgui::{Context, Ui, WindowFlags, StyleVar, dear_imgui_version};
@@ -50,38 +51,52 @@ fn render(world: &mut World, ui: &Ui) {
   space.pop();
   ui.same_line_with_spacing(0.0, 0.0);
   let pad = ui.push_style_var(StyleVar::WindowPadding([8.0, 8.0]));
-  ui.child_window("r").border(true).build(|| match pane {
-    SettingsPane::Appearance => unsafe {
-      static mut THEME: usize = 0; // too bored for a resource
-      if ui.combo_simple_string("Theme", &mut THEME, &["Dark", "Nord", "Light"]) {
-        let style = world.get_resource::<Context>().unwrap().style_mut();
-        match THEME {
-          0 => phosphor_imgui::theme_dark(style),
-          1 => phosphor_imgui::theme_nord(style),
-          2 => {
-            style.use_light_colors();
+  ui.child_window("r").border(true).build(|| {
+    let id = ui.push_id("##");
+    match pane {
+      SettingsPane::Appearance => unsafe {
+        static mut THEME: usize = 0; // too bored for a resource
+        if ui.combo_simple_string("Theme", &mut THEME, &["Dark", "Nord", "Light"]) {
+          let style = world.get_resource::<Context>().unwrap().style_mut();
+          match THEME {
+            0 => phosphor_imgui::theme_dark(style),
+            1 => phosphor_imgui::theme_nord(style),
+            2 => {
+              style.use_light_colors();
+            }
+            _ => {}
           }
-          _ => {}
         }
+      },
+      SettingsPane::About => {
+        let font = ui.push_font(ui.fonts().fonts()[1]);
+        ui.text("\u{f5d3} Phosphor");
+        font.pop();
+        ui.text("github.com/chxry/phosphor");
+        let [w, _] = ui.window_size();
+        ui.same_line_with_pos(w - 40.0);
+        ui.text(env!("CARGO_PKG_VERSION"));
+        ui.separator();
+        let renderer = world.get_resource::<Renderer>().unwrap();
+        item(ui, "Opengl ver:", renderer.version);
+        item(ui, "GLFW ver:", &phosphor::glfw::get_version_string());
+        item(ui, "Dear ImGui ver:", dear_imgui_version());
+        let fmod = world.get_resource::<FmodContext>().unwrap();
+        item(ui, "FMOD ver:", &fmod.ver);
+        item(ui, "GPU", renderer.renderer);
+        item(
+          ui,
+          "Build:",
+          &format!(
+            "{} {} {}",
+            &include_str!("../../../.git/refs/heads/master")[..7],
+            consts::OS,
+            consts::ARCH
+          ),
+        );
       }
-    },
-    SettingsPane::About => {
-      let font = ui.push_font(ui.fonts().fonts()[1]);
-      ui.text("\u{f5d3} Phosphor");
-      font.pop();
-      ui.text("github.com/chxry/phosphor");
-      let [w, _] = ui.window_size();
-      ui.same_line_with_pos(w - 40.0);
-      ui.text(env!("CARGO_PKG_VERSION"));
-      ui.separator();
-      let renderer = world.get_resource::<Renderer>().unwrap();
-      item(ui, "opengl ver", renderer.version);
-      item(ui, "glfw ver", &phosphor::glfw::get_version_string());
-      item(ui, "imgui ver", dear_imgui_version());
-      let fmod = world.get_resource::<FmodContext>().unwrap();
-      item(ui, "fmod ver", &fmod.ver);
-      item(ui, "gpu", renderer.renderer);
     }
+    id.pop();
   });
   pad.pop();
 }

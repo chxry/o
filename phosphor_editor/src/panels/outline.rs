@@ -26,7 +26,7 @@ fn render(world: &mut World, ui: &Ui) {
     {
       *selected = SelectedEntity(Some(e));
     }
-    id.end();
+    id.pop();
   }
   ui.separator();
   if ui.button_with_size("\u{2b} Add Entity", [w, 0.0]) {

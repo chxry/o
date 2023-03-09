@@ -55,12 +55,12 @@ impl Transform {
   }
 
   // goofy
-  pub fn euler_dir(&self) -> Vec3 {
-    euler_dir(self.rotation.x, self.rotation.y)
+  pub fn dir(&self) -> Vec3 {
+    dir(self.rotation.x, self.rotation.y)
   }
 }
 
-fn euler_dir(yaw: f32, pitch: f32) -> Vec3 {
+fn dir(yaw: f32, pitch: f32) -> Vec3 {
   Vec3::new(
     pitch.to_radians().cos() * yaw.to_radians().cos(),
     yaw.to_radians().sin(),
@@ -91,7 +91,7 @@ pub struct Model {
 
 impl Model {
   pub fn new(mesh: Handle<Mesh>) -> Self {
-    Model {
+    Self {
       mesh,
       cast_shadows: true,
       wireframe: false,
@@ -102,22 +102,26 @@ impl Model {
 #[derive(Serialize, Deserialize)]
 #[component]
 pub enum Material {
-  Color(Vec3),
-  Texture(Handle<Texture>),
+  Color { color: Vec3, spec: f32 },
+  Texture { tex: Handle<Texture>, spec: f32 },
   Normal,
 }
 
 impl Material {
   pub fn default(world: &World, id: usize) -> Self {
     match id {
-      0 => Self::Color(Vec3::splat(0.75)),
-      1 => Self::Texture(
-        world
+      0 => Self::Color {
+        color: Vec3::splat(0.75),
+        spec: 0.5,
+      },
+      1 => Self::Texture {
+        tex: world
           .get_resource::<Assets>()
           .unwrap()
           .load("brick.jpg")
           .unwrap(),
-      ),
+        spec: 0.5,
+      },
       2 => Self::Normal,
       _ => {
         error!("Unknown material {}.", id);
@@ -128,13 +132,33 @@ impl Material {
 
   pub fn id(&self) -> usize {
     match self {
-      Self::Color(_) => 0,
-      Self::Texture(_) => 1,
+      Self::Color { .. } => 0,
+      Self::Texture { .. } => 1,
       Self::Normal => 2,
     }
   }
 }
 
+#[derive(Serialize, Deserialize)]
+#[component]
+pub struct Light {
+  pub color: Vec3,
+  pub strength: f32,
+}
+
+impl Light {
+  pub fn new(color: Vec3) -> Self {
+    Self {
+      color,
+      strength: 1.0,
+    }
+  }
+
+  pub fn strength(mut self, strength: f32) -> Self {
+    self.strength = strength;
+    self
+  }
+}
 pub struct SkySettings {
   pub dir: Vec2,
 }
@@ -237,16 +261,16 @@ fn scenerenderer_draw(world: &mut World) -> Result {
       Some(cam_t) => {
         let r = world.get_resource::<SceneRenderer>().unwrap();
         let sky = world.get_resource::<SkySettings>().unwrap();
-        let light_dir = euler_dir(sky.dir.x, sky.dir.y);
+        let sun_dir = dir(sky.dir.x, sky.dir.y);
 
         r.shadow_fb.bind();
         renderer.resize(SHADOW_RES, SHADOW_RES);
         renderer.clear(0.0, 0.0, 0.0, 1.0);
-        let light_view = Mat4::look_at_rh(light_dir, Vec3::ZERO, Vec3::Y);
-        let light_projection = Mat4::orthographic_rh(-40.0, 40.0, -40.0, 40.0, 0.1, 50.0);
+        let sun_view = Mat4::look_at_rh(sun_dir, Vec3::ZERO, Vec3::Y);
+        let sun_projection = Mat4::orthographic_rh(-40.0, 40.0, -40.0, 40.0, 0.1, 50.0);
         r.shadow_shader.bind();
-        r.shadow_shader.set_mat4("view", &light_view);
-        r.shadow_shader.set_mat4("projection", &light_projection);
+        r.shadow_shader.set_mat4("view", &sun_view);
+        r.shadow_shader.set_mat4("projection", &sun_projection);
         for (e, model) in world.query::<Model>() {
           if model.cast_shadows {
             if let Some(model_t) = e.get_one::<Transform>() {
@@ -270,55 +294,72 @@ fn scenerenderer_draw(world: &mut World) -> Result {
         };
         renderer.clear(0.0, 0.0, 0.0, 1.0);
 
-        let view = Mat4::look_to_rh(cam_t.position, cam_t.euler_dir(), Vec3::Y);
+        let view = Mat4::look_to_rh(cam_t.position, cam_t.dir(), Vec3::Y);
         let projection =
           Mat4::perspective_rh(cam.fov.to_radians(), aspect, cam.clip[0], cam.clip[1]);
 
         r.sky_shader.bind();
         r.sky_shader.set_mat4("view", &view);
         r.sky_shader.set_mat4("projection", &projection);
-        r.sky_shader.set_vec3("light_dir", &light_dir);
-        r.sky_shader.set_f32("atmosphere_rad", 6372e3);
+        r.sky_shader.set_vec3("sun_dir", &sun_dir);
         unsafe {
           gl::DepthMask(gl::FALSE);
           r.sky_mesh.draw();
           gl::DepthMask(gl::TRUE);
         }
 
+        for s in [r.color_shader, r.texture_shader, r.normal_shader] {
+          s.bind();
+          s.set_mat4("view", &view);
+          s.set_mat4("projection", &projection);
+          s.set_vec3("cam_pos", &cam_t.position);
+          s.set_vec3("sun_dir", &sun_dir);
+          s.set_mat4("sun_view", &sun_view);
+          s.set_mat4("sun_projection", &sun_projection);
+          let lights = world.query::<Light>();
+          for (i, (e, light)) in lights.iter().enumerate() {
+            match e.get_one::<Transform>() {
+              Some(light_t) => {
+                s.set_vec3(&format!("lights[{}].pos", i), &light_t.position);
+                s.set_vec3(&format!("lights[{}].color", i), &light.color);
+                s.set_f32(&format!("lights[{}].strength", i), light.strength);
+              }
+              None => warn!(
+                "Light on entity {} will not be rendered (Missing transform).",
+                e.id
+              ),
+            }
+          }
+          s.set_i32("num_lights", lights.len() as _);
+          s.set_i32("shadow_map", 1);
+        }
+
+        r.shadow_tex.bind(1);
         for (e, model) in world.query::<Model>() {
           match e.get_one::<Transform>() {
             Some(model_t) => {
-              let (shader, lit) = match e
+              let shader = match e
                 .get_one::<Material>()
                 .unwrap_or(&mut Material::default(world, 0))
               {
-                Material::Color(col) => {
+                Material::Color { color, spec } => {
                   r.color_shader.bind();
-                  r.color_shader.set_vec3("color", col);
-                  (&r.color_shader, true)
+                  r.color_shader.set_vec3("color", color);
+                  r.color_shader.set_f32("specular", *spec);
+                  &r.color_shader
                 }
-                Material::Texture(tex) => {
+                Material::Texture { tex, spec } => {
                   r.texture_shader.bind();
                   tex.bind(0);
-                  (&r.texture_shader, true)
+                  r.texture_shader.set_f32("specular", *spec);
+                  &r.texture_shader
                 }
                 Material::Normal => {
                   r.normal_shader.bind();
-                  (&r.normal_shader, false)
+                  &r.normal_shader
                 }
               };
-
-              // set these only once
               shader.set_mat4("model", &model_t.as_mat4());
-              shader.set_mat4("view", &view);
-              shader.set_mat4("projection", &projection);
-              if lit {
-                shader.set_vec3("light_dir", &light_dir);
-                shader.set_mat4("light_view", &light_view);
-                shader.set_mat4("light_projection", &light_projection);
-                r.shadow_tex.bind(1);
-                shader.set_i32("shadow_map", 1);
-              }
               unsafe {
                 gl::PolygonMode(
                   gl::FRONT_AND_BACK,

@@ -2,7 +2,7 @@
 in vec3 v_pos;
 out vec4 f_color;
 
-uniform vec3 light_dir;
+uniform vec3 sun_dir;
 
 // https://github.com/wwwtyro/glsl-atmosphere/blob/master/index.glsl
 
@@ -118,7 +118,7 @@ void main() {
   vec3 color = atmosphere(
     normalize(v_pos),           // normalized ray direction
     vec3(0,6372e3,0),               // ray origin
-    light_dir,                        // position of the sun
+    sun_dir,                        // position of the sun
     22.0,                           // intensity of the sun
     6371e3,                         // radius of the planet in meters
     6471e3,                         // radius of the atmosphere in meters

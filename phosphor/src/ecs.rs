@@ -1,6 +1,7 @@
 use std::collections::{HashMap, BTreeMap};
 use std::any::{Any, type_name};
-use log::{error, trace};
+use log::error;
+use nanorand::{Rng, WyRand};
 use serde::{Serialize, Deserialize};
 use crate::{Result, HashMapExt, TypeIdNamed, component, WORLD};
 
@@ -19,7 +20,6 @@ pub struct World {
   pub components: HashMap<TypeIdNamed, Vec<(usize, Box<dyn Any>)>>,
   resources: HashMap<TypeIdNamed, Box<dyn Any>>,
   systems: HashMap<usize, Vec<(&'static dyn System, &'static str)>>,
-  count: usize,
 }
 
 impl World {
@@ -28,7 +28,6 @@ impl World {
       components: HashMap::new(),
       resources: HashMap::new(),
       systems: HashMap::new(),
-      count: 0,
     }
   }
 
@@ -41,8 +40,9 @@ impl World {
   }
 
   pub(crate) fn spawn_empty(&self) -> Entity {
-    self.g().count += 1;
-    Entity { id: self.g().count }
+    Entity {
+      id: WyRand::new().generate(),
+    }
   }
 
   pub fn query<T: Any>(&self) -> Vec<(Entity, &mut T)> {
@@ -100,7 +100,6 @@ impl World {
   pub fn run_system(&self, stage: usize) {
     if let Some(vec) = self.systems.get(&stage) {
       for (sys, name) in vec.clone() {
-        trace!("Running system '{}'.", name);
         if let Err(e) = sys(self.g()) {
           error!("Error in system '{}': {}", name, e);
         }
