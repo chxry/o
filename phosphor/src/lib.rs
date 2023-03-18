@@ -29,6 +29,7 @@ pub type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 static mut WORLD: OnceCell<World> = OnceCell::new();
 
 pub struct Engine;
+pub struct DeltaTime(pub f32);
 
 impl Engine {
   pub fn new() -> Self {
@@ -59,7 +60,11 @@ impl Engine {
     let renderer = world.get_resource::<Renderer>().unwrap();
     world.run_system(stage::INIT);
     world.run_system(stage::START);
+    let mut t = renderer.glfw.get_time();
     while !renderer.window.should_close() {
+      let n = renderer.glfw.get_time();
+      world.add_resource(DeltaTime((n - t) as _));
+      t = n;
       renderer.glfw.poll_events();
       for (_, event) in renderer.events.try_iter() {
         world.add_resource(event);

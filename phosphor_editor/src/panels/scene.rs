@@ -1,8 +1,9 @@
+use std::f32::consts::FRAC_PI_2;
 use phosphor::Result;
 use phosphor::ecs::{World, Name, stage};
 use phosphor::gfx::{Texture, Framebuffer, Renderer};
 use phosphor::glfw::{Key, Action, CursorMode, MouseButton};
-use phosphor::math::Vec3;
+use phosphor::math::{Vec3, EulerRot, Quat};
 use phosphor_imgui::imgui::{Ui, Image, TextureId, WindowFlags, StyleVar, Condition};
 use phosphor_3d::{Camera, Transform, SceneDrawOptions, scenerenderer_plugin};
 use crate::{SelectedEntity, load};
@@ -59,26 +60,31 @@ fn predraw(world: &mut World) -> Result {
           }
           let (dx, dy) = (x - s.last_pos.0, y - s.last_pos.1);
           s.last_pos = (x, y);
-          cam_t.rotation.y += dx / 5.0;
-          cam_t.rotation.x = (cam_t.rotation.x - dy / 5.0).clamp(-89.9, 89.9);
+          let mut euler = cam_t.rotation.to_euler(EulerRot::YXZ);
+          euler.0 -= dx * 0.005;
+          euler.1 -= dy * 0.005;
+          euler.1 = euler.1.clamp(-FRAC_PI_2 + 0.1, FRAC_PI_2 - 0.1);
+          cam_t.rotation = Quat::from_euler(EulerRot::YXZ, euler.0, euler.1, euler.2);
         } else {
           renderer.window.set_cursor_mode(CursorMode::Normal);
         }
 
-        let front = cam_t.dir() * 0.15;
+        let front = cam_t.rotation * Vec3::NEG_Z;
         let right = front.cross(Vec3::Y);
+        let mut trans = Vec3::ZERO;
         if renderer.window.get_key(Key::W) == Action::Press {
-          cam_t.position += front;
+          trans += front;
         }
         if renderer.window.get_key(Key::S) == Action::Press {
-          cam_t.position -= front;
+          trans -= front;
         }
         if renderer.window.get_key(Key::A) == Action::Press {
-          cam_t.position -= right
+          trans -= right
         }
         if renderer.window.get_key(Key::D) == Action::Press {
-          cam_t.position += right;
+          trans += right;
         }
+        cam_t.position += trans.normalize_or_zero() * 0.1;
       }
       None => {
         s.cam = false;

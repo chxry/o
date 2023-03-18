@@ -219,6 +219,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd0c93bb4b0c6d9b77f4435b0ae98c24d17f1c45b2ff844c6151a07256ca923b"
 
 [[package]]
+name = "dolly"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "817a57da6082ade97c55fc61b9c0b76803c694f265bb74e9e3ac1f44b829087d"
+dependencies = [
+ "glam",
+]
+
+[[package]]
 name = "either"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -299,11 +308,11 @@ checksum = "f310820bb3e8cfd46c80db4d7fb8353e15dfff853a127158425f31e0be6c8364"
 name = "game"
 version = "0.1.0"
 dependencies = [
+ "dolly",
  "ezlogger 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "phosphor",
  "phosphor_3d",
  "phosphor_fmod",
- "phosphor_imgui",
 ]
 
 [[package]]
@@ -610,6 +619,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "log_once"
+version = "0.1.0"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "malloc_buf"
 version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -806,6 +822,7 @@ name = "phosphor_3d"
 version = "0.1.0"
 dependencies = [
  "linkme",
+ "log_once",
  "phosphor",
  "serde",
 ]

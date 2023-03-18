@@ -1,10 +1,11 @@
 use phosphor::Result;
 use phosphor::gfx::{Renderer, Shader, Texture, Mesh, Framebuffer, Vertex, gl};
 use phosphor::ecs::{World, stage};
-use phosphor::math::{Vec3, Quat, EulerRot, Mat4, Vec2};
+use phosphor::math::{Vec3, Quat, Mat4, Vec2, EulerRot};
 use phosphor::assets::{Assets, Handle};
-use phosphor::log::{warn, error};
+use phosphor::log::error;
 use phosphor::component;
+use log_once::warn_once;
 use serde::{Serialize, Deserialize};
 
 const SHADOW_RES: u32 = 4096;
@@ -13,7 +14,7 @@ const SHADOW_RES: u32 = 4096;
 #[component]
 pub struct Transform {
   pub position: Vec3,
-  pub rotation: Vec3,
+  pub rotation: Quat,
   pub scale: Vec3,
 }
 
@@ -21,7 +22,7 @@ impl Transform {
   pub fn new() -> Self {
     Self {
       position: Vec3::ZERO,
-      rotation: Vec3::ZERO,
+      rotation: Quat::IDENTITY,
       scale: Vec3::ONE,
     }
   }
@@ -31,8 +32,18 @@ impl Transform {
     self
   }
 
-  pub fn rot(mut self, rotation: Vec3) -> Self {
+  pub fn rot(mut self, rotation: Quat) -> Self {
     self.rotation = rotation;
+    self
+  }
+
+  pub fn rot_euler(mut self, y: f32, p: f32, r: f32) -> Self {
+    self.rotation = Quat::from_euler(
+      EulerRot::YXZ,
+      y.to_radians(),
+      p.to_radians(),
+      r.to_radians(),
+    );
     self
   }
 
@@ -42,21 +53,7 @@ impl Transform {
   }
 
   pub fn as_mat4(&self) -> Mat4 {
-    Mat4::from_scale_rotation_translation(
-      self.scale,
-      Quat::from_euler(
-        EulerRot::XYZ,
-        self.rotation.x.to_radians(),
-        self.rotation.y.to_radians(),
-        self.rotation.z.to_radians(),
-      ),
-      self.position,
-    )
-  }
-
-  // goofy
-  pub fn dir(&self) -> Vec3 {
-    dir(self.rotation.x, self.rotation.y)
+    Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.position)
   }
 }
 
@@ -294,7 +291,7 @@ fn scenerenderer_draw(world: &mut World) -> Result {
         };
         renderer.clear(0.0, 0.0, 0.0, 1.0);
 
-        let view = Mat4::look_to_rh(cam_t.position, cam_t.dir(), Vec3::Y);
+        let view = Mat4::look_to_rh(cam_t.position, cam_t.rotation * Vec3::NEG_Z, Vec3::Y);
         let projection =
           Mat4::perspective_rh(cam.fov.to_radians(), aspect, cam.clip[0], cam.clip[1]);
 
@@ -324,7 +321,7 @@ fn scenerenderer_draw(world: &mut World) -> Result {
                 s.set_vec3(&format!("lights[{}].color", i), &light.color);
                 s.set_f32(&format!("lights[{}].strength", i), light.strength);
               }
-              None => warn!(
+              None => warn_once!(
                 "Light on entity {} will not be rendered (Missing transform).",
                 e.id
               ),
@@ -368,16 +365,16 @@ fn scenerenderer_draw(world: &mut World) -> Result {
               }
               model.mesh.draw();
             }
-            None => warn!(
+            None => warn_once!(
               "Mesh on entity {} won't be rendered (Missing Transform).",
               e.id
             ),
           }
         }
       }
-      None => warn!("Scene will not be rendered (Missing camera transform)."),
+      None => warn_once!("Scene will not be rendered (Missing camera transform)."),
     },
-    None => warn!("Scene will not be rendered (Missing camera)."),
+    None => warn_once!("Scene will not be rendered (Missing camera)."),
   };
   unsafe {
     gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);

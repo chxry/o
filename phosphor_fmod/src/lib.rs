@@ -77,36 +77,14 @@ fn fmod_predraw(world: &mut World) -> Result {
   if let Some((e, _)) = world.query::<Camera>().get(0) {
     if let Some(cam_t) = e.get_one::<Transform>() {
       let fmod = world.get_resource::<FmodContext>().unwrap();
-      let dir = cam_t.dir();
-      let up = dir.cross(Vec3::Y.cross(dir)).normalize();
-      // let up = dir.cross(Vec3::Y).normalize();
-      // debug!("{} {}", dir, up);
-      // debug!(
-      //   "{} {} {}",
-      //   dir.length(),
-      //   up.length(),
-      //   dir.angle_between(up).to_degrees()
-      // );
-      // fmod
-      //   .system
-      //   .set_3d_listener_attributes(
-      //     0,
-      //     fvec(cam_t.position),
-      //     fvec(Vec3::ZERO),
-      //     None,
-      //     None,
-      //     // fvec(dir),
-      //     // fvec(up),
-      //   )
-      //   .unwrap();
       unsafe {
         FMOD_System_Set3DListenerAttributes(
           fmod.system.as_mut_ptr(),
           0,
           &fvec(cam_t.position),
           &fvec(Vec3::ZERO),
-          &fvec(dir),
-          &fvec(up),
+          &fvec(cam_t.rotation * Vec3::NEG_Z),
+          &fvec(cam_t.rotation * Vec3::Y),
         );
       }
       fmod.system.update().unwrap();

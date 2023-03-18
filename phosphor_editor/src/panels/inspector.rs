@@ -3,7 +3,7 @@ use std::any::Any;
 use phosphor::{TypeIdNamed, HashMapExt};
 use phosphor::ecs::{World, Name};
 use phosphor::assets::{Handle, Assets};
-use phosphor::math::Vec3;
+use phosphor::math::{Vec3, Quat, EulerRot};
 use phosphor_imgui::hover_tooltip;
 use phosphor_imgui::imgui::{Ui, Drag, WindowFlags, TreeNodeFlags, DragDropFlags};
 use phosphor_3d::{Camera, Transform, Model, Material, Light};
@@ -109,15 +109,23 @@ fn inspector_transform(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
   let transform: &mut Transform = t.downcast_mut().unwrap();
   Drag::new("Position")
     .speed(0.05)
-    .display_format("%g")
     .build_array(ui, transform.position.as_mut());
-  Drag::new("Rotation")
-    .speed(0.5)
-    .display_format("%g")
-    .build_array(ui, transform.rotation.as_mut());
+  let euler = transform.rotation.to_euler(EulerRot::YXZ);
+  let mut euler = [
+    euler.0.to_degrees(),
+    euler.1.to_degrees(),
+    euler.2.to_degrees(),
+  ];
+  if Drag::new("Rotation").speed(0.5).build_array(ui, &mut euler) {
+    transform.rotation = Quat::from_euler(
+      EulerRot::YXZ,
+      euler[0].to_radians(),
+      euler[1].to_radians(),
+      euler[2].to_radians(),
+    );
+  }
   Drag::new("Scale")
     .speed(0.05)
-    .display_format("%g")
     .build_array(ui, transform.scale.as_mut());
 }
 
@@ -225,7 +233,7 @@ fn render(world: &mut World, ui: &Ui) {
               if !close {
                 world.remove_id(t, e.id);
               }
-              id.end();
+              id.pop();
             }
           }
           None => ui.disabled(true, || {
@@ -275,5 +283,5 @@ fn asset_picker<T: Any>(ui: &Ui, label: &str, world: &mut World, handle: &mut Ha
       *handle = selected.0.as_ref().unwrap().1.downcast();
     }
   }
-  id.end();
+  id.pop();
 }
