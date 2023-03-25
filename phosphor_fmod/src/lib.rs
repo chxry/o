@@ -1,5 +1,5 @@
 use std::ffi::CString;
-use libfmod::{System, Sound as FmodSound};
+use libfmod::{System, Sound as FmodSound, Channel};
 use libfmod::ffi::{
   FMOD_INIT_3D_RIGHTHANDED, FMOD_3D, FMOD_VECTOR, FMOD_System_GetDriverInfo,
   FMOD_System_Set3DListenerAttributes, FMOD_Channel_Set3DAttributes,
@@ -63,20 +63,18 @@ pub fn fmod_plugin(world: &mut World) -> Result {
 }
 
 fn fmod_start(world: &mut World) -> Result {
-  for (e, a) in world.query::<AudioSource>() {
+  for (_, a) in world.query::<AudioSource>() {
     if a.play_on_start {
-      if let Some(t) = e.get_one::<Transform>() {
-        a.play(world, t.position);
-      }
+      a.play(world);
     }
   }
   Ok(())
 }
 
 fn fmod_predraw(world: &mut World) -> Result {
+  let fmod = world.get_resource::<FmodContext>().unwrap();
   if let Some((e, _)) = world.query::<Camera>().get(0) {
     if let Some(cam_t) = e.get_one::<Transform>() {
-      let fmod = world.get_resource::<FmodContext>().unwrap();
       unsafe {
         FMOD_System_Set3DListenerAttributes(
           fmod.system.as_mut_ptr(),
@@ -87,9 +85,18 @@ fn fmod_predraw(world: &mut World) -> Result {
           &fvec(cam_t.rotation * Vec3::Y),
         );
       }
-      fmod.system.update().unwrap();
     }
   }
+  for (e, a) in world.query::<AudioSource>() {
+    if let Some(channel) = a.channel {
+      if let Some(t) = e.get_one::<Transform>() {
+        unsafe {
+          FMOD_Channel_Set3DAttributes(channel.as_mut_ptr(), &fvec(t.position), &fvec(Vec3::ZERO));
+        }
+      }
+    }
+  }
+  fmod.system.update().unwrap();
   Ok(())
 }
 
@@ -113,6 +120,8 @@ pub struct AudioSource {
   pub sound: Handle<Sound>,
   pub pitch: f32,
   pub play_on_start: bool,
+  #[serde(skip)]
+  channel: Option<Channel>,
 }
 
 impl AudioSource {
@@ -121,10 +130,11 @@ impl AudioSource {
       sound,
       pitch: 1.0,
       play_on_start: true,
+      channel: None,
     }
   }
 
-  pub fn play(&self, world: &World, pos: Vec3) {
+  pub fn play(&mut self, world: &World) {
     let channel = world
       .get_resource::<FmodContext>()
       .unwrap()
@@ -132,9 +142,7 @@ impl AudioSource {
       .play_sound(self.sound.0, None, false)
       .unwrap();
     channel.set_pitch(self.pitch).unwrap();
-    unsafe {
-      FMOD_Channel_Set3DAttributes(channel.as_mut_ptr(), &fvec(pos), &fvec(Vec3::ZERO));
-    }
+    self.channel = Some(channel);
   }
 }
 

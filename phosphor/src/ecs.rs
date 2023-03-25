@@ -46,7 +46,9 @@ impl World {
   }
 
   pub fn query<T: Any>(&self) -> Vec<(Entity, &mut T)> {
-    match self.g().components.get_mut(&TypeIdNamed::of::<T>()) {
+    let t = TypeIdNamed::of::<T>();
+    puffin::profile_function!(t.name);
+    match self.g().components.get_mut(&t) {
       Some(v) => v
         .iter_mut()
         .map(|(e, b)| (Entity { id: *e }, b.downcast_mut().unwrap()))
@@ -56,6 +58,7 @@ impl World {
   }
 
   pub fn get_name(&self, name: &str) -> Option<Entity> {
+    puffin::profile_function!(name);
     self
       .query::<Name>()
       .iter_mut()
@@ -78,17 +81,18 @@ impl World {
   }
 
   pub fn get_resource<T: Any>(&self) -> Option<&mut T> {
-    match self.g().resources.get_mut(&TypeIdNamed::of::<T>()) {
+    let t = TypeIdNamed::of::<T>();
+    puffin::profile_function!(t.name);
+    match self.g().resources.get_mut(&t) {
       Some(r) => Some(r.downcast_mut().unwrap()),
       None => None,
     }
   }
 
   pub fn take_resource<T: Any>(&mut self) -> Option<T> {
-    self
-      .resources
-      .remove(&TypeIdNamed::of::<T>())
-      .map(|r| *r.downcast().unwrap())
+    let t = TypeIdNamed::of::<T>();
+    puffin::profile_function!(t.name);
+    self.resources.remove(&t).map(|r| *r.downcast().unwrap())
   }
 
   pub fn add_system<S: System + 'static>(&mut self, stage: usize, sys: S) {
@@ -100,6 +104,7 @@ impl World {
   pub fn run_system(&self, stage: usize) {
     if let Some(vec) = self.systems.get(&stage) {
       for (sys, name) in vec.clone() {
+        puffin::profile_scope!(name);
         if let Err(e) = sys(self.g()) {
           error!("Error in system '{}': {}", name, e);
         }
@@ -130,13 +135,10 @@ impl Entity {
   }
 
   pub fn get<T: Any>(&self) -> Vec<&mut T> {
+    let t = TypeIdNamed::of::<T>();
+    puffin::profile_function!(t.name);
     unsafe {
-      match WORLD
-        .get_mut()
-        .unwrap()
-        .components
-        .get_mut(&TypeIdNamed::of::<T>())
-      {
+      match WORLD.get_mut().unwrap().components.get_mut(&t) {
         Some(v) => v
           .iter_mut()
           .filter_map(|(e, c)| (*e == self.id).then(|| c.downcast_mut().unwrap()))
@@ -151,12 +153,13 @@ impl Entity {
   }
 
   pub fn get_all(&self) -> BTreeMap<TypeIdNamed, Vec<&mut Box<dyn Any>>> {
+    puffin::profile_function!();
     let mut components = BTreeMap::new();
     unsafe {
       for (t, v) in WORLD.get_mut().unwrap().components.iter_mut() {
         let v: Vec<&mut Box<dyn Any>> = v
           .iter_mut()
-          .filter_map(|(e, c)| (*e == self.id).then(|| c))
+          .filter_map(|(e, c)| (*e == self.id).then_some(c))
           .collect();
         if !v.is_empty() {
           components.insert(*t, v);

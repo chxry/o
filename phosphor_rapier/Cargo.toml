@@ -1,0 +1,13 @@
+[package]
+name = "phosphor_rapier"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+phosphor = { path = "../phosphor" }
+phosphor_3d = { path = "../phosphor_3d" }
+phosphor_imgui = { path = "../phosphor_imgui" }
+rapier3d = { version = "0.17", features = ["debug-render", "serde-serialize"] }
+nalgebra = { version = "0.32", features = [ "convert-glam022" ] }
+serde = { version = "1.0", features = ["derive"] }
+linkme = "0.3"

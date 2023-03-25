@@ -8,5 +8,5 @@ out vec4 f_color;
 
 void main() {
     vec3 col = pow(frag_color.rgb,vec3(2.2));
-    f_color = vec4(col.rgb,frag_color.a) * texture(tex,frag_uv);
+    f_color = vec4(col, frag_color.a) * texture(tex,frag_uv);
 }

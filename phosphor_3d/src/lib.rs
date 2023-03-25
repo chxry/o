@@ -1,6 +1,7 @@
+#![allow(clippy::new_without_default)]
 use phosphor::Result;
 use phosphor::gfx::{Renderer, Shader, Texture, Mesh, Framebuffer, Vertex, gl};
-use phosphor::ecs::{World, stage};
+use phosphor::ecs::{World, Name, stage};
 use phosphor::math::{Vec3, Quat, Mat4, Vec2, EulerRot};
 use phosphor::assets::{Assets, Handle};
 use phosphor::log::error;
@@ -76,6 +77,17 @@ impl Camera {
   pub fn new(fov: f32, clip: [f32; 2]) -> Self {
     Self { fov, clip }
   }
+
+  pub fn matrices(&self, transform: &Transform, aspect: f32) -> (Mat4, Mat4) {
+    (
+      Mat4::look_to_rh(
+        transform.position,
+        transform.rotation * Vec3::NEG_Z,
+        Vec3::Y,
+      ),
+      Mat4::perspective_rh(self.fov.to_radians(), aspect, self.clip[0], self.clip[1]),
+    )
+  }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -115,7 +127,7 @@ impl Material {
         tex: world
           .get_resource::<Assets>()
           .unwrap()
-          .load("brick.jpg")
+          .load("garfield.png")
           .unwrap(),
         spec: 0.5,
       },
@@ -147,7 +159,7 @@ impl Light {
   pub fn new(color: Vec3) -> Self {
     Self {
       color,
-      strength: 1.0,
+      strength: 2.5,
     }
   }
 
@@ -156,6 +168,7 @@ impl Light {
     self
   }
 }
+
 pub struct SkySettings {
   pub dir: Vec2,
 }
@@ -233,13 +246,13 @@ pub fn scenerenderer_plugin(world: &mut World) -> Result {
       ],
       &[0, 1, 2, 1, 3, 2],
     ),
-    sky_shader: Shader::new("assets/sky.vert", "assets/sky.frag")?,
+    sky_shader: Shader::new("sky.vert", "sky.frag")?,
     shadow_fb,
     shadow_tex,
-    shadow_shader: Shader::new("assets/shadow.vert", "assets/shadow.frag")?,
-    color_shader: Shader::new("assets/base.vert", "assets/color.frag")?,
-    texture_shader: Shader::new("assets/base.vert", "assets/texture.frag")?,
-    normal_shader: Shader::new("assets/base.vert", "assets/normal.frag")?,
+    shadow_shader: Shader::new("shadow.vert", "shadow.frag")?,
+    color_shader: Shader::new("base.vert", "color.frag")?,
+    texture_shader: Shader::new("base.vert", "texture.frag")?,
+    normal_shader: Shader::new("base.vert", "normal.frag")?,
   });
   world.add_system(stage::DRAW, scenerenderer_draw);
   Ok(())
@@ -291,9 +304,7 @@ fn scenerenderer_draw(world: &mut World) -> Result {
         };
         renderer.clear(0.0, 0.0, 0.0, 1.0);
 
-        let view = Mat4::look_to_rh(cam_t.position, cam_t.rotation * Vec3::NEG_Z, Vec3::Y);
-        let projection =
-          Mat4::perspective_rh(cam.fov.to_radians(), aspect, cam.clip[0], cam.clip[1]);
+        let (view, projection) = cam.matrices(cam_t, aspect);
 
         r.sky_shader.bind();
         r.sky_shader.set_mat4("view", &view);
@@ -322,7 +333,8 @@ fn scenerenderer_draw(world: &mut World) -> Result {
                 s.set_f32(&format!("lights[{}].strength", i), light.strength);
               }
               None => warn_once!(
-                "Light on entity {} will not be rendered (Missing transform).",
+                "Light on entity '{}'({}) will not be rendered (Missing transform).",
+                e.get_one::<Name>().map_or("?", |n| &n.0),
                 e.id
               ),
             }
@@ -366,7 +378,8 @@ fn scenerenderer_draw(world: &mut World) -> Result {
               model.mesh.draw();
             }
             None => warn_once!(
-              "Mesh on entity {} won't be rendered (Missing Transform).",
+              "Mesh on entity '{}'({}) won't be rendered (Missing Transform).",
+              e.get_one::<Name>().map_or("?", |n| &n.0),
               e.id
             ),
           }

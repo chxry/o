@@ -17,5 +17,5 @@ fn render(world: &mut World, ui: &Ui) {
   let sky = world.get_resource::<SkySettings>().unwrap();
   Drag::new("light dir")
     .speed(0.5)
-    .build_array(&ui, sky.dir.as_mut());
+    .build_array(ui, sky.dir.as_mut());
 }

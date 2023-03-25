@@ -23,7 +23,7 @@ pub struct UiRendererOptions {
 impl UiRendererOptions {
   const DEFAULT: Self = Self {
     docking: false,
-    fonts: &[&[("assets/roboto.ttf", 16.0, None)]],
+    fonts: &[&[("assets/fonts/roboto.ttf", 16.0, None)]],
   };
 }
 
@@ -102,7 +102,7 @@ pub fn imgui_plugin(world: &mut World) -> Result {
   style.popup_rounding = 4.0;
   style.frame_rounding = 2.0;
 
-  let shader = Shader::new("assets/imgui.vert", "assets/imgui.frag")?;
+  let shader = Shader::new("imgui.vert", "imgui.frag")?;
   let mut vert_arr = 0;
   let mut vert_buf = 0;
   let mut idx_buf = 0;

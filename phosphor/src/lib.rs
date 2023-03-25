@@ -1,6 +1,7 @@
 #![feature(const_type_id)]
 #![feature(const_type_name)]
 #![feature(trait_alias)]
+#![allow(clippy::new_without_default)]
 pub mod gfx;
 pub mod ecs;
 pub mod assets;
@@ -24,7 +25,7 @@ pub use glfw;
 pub use bincode;
 pub use linkme;
 
-pub type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 static mut WORLD: OnceCell<World> = OnceCell::new();
 
@@ -62,6 +63,7 @@ impl Engine {
     world.run_system(stage::START);
     let mut t = renderer.glfw.get_time();
     while !renderer.window.should_close() {
+      puffin::GlobalProfiler::lock().new_frame();
       let n = renderer.glfw.get_time();
       world.add_resource(DeltaTime((n - t) as _));
       t = n;

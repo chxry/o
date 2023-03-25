@@ -110,7 +110,7 @@ fn render(world: &mut World, ui: &Ui) {
     Image::new(TextureId::new(s.tex.id as _), s.size)
       .uv0([0.0, 1.0])
       .uv1([1.0, 0.0])
-      .build(&ui);
+      .build(ui);
     let pad = ui.push_style_var(StyleVar::WindowPadding([2.0, 2.0]));
     let round = ui.push_style_var(StyleVar::WindowRounding(0.0));
     ui.window("##")

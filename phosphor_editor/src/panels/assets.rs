@@ -31,7 +31,7 @@ pub fn init(world: &mut World) -> Panel {
     fb,
     textures: HashMap::new(),
     selected_tex: Texture::empty(),
-    shader: Shader::new("assets/base.vert", "assets/unlit.frag").unwrap(),
+    shader: Shader::new("base.vert", "unlit.frag").unwrap(),
     spin: 0.0,
   });
   Panel {
@@ -59,7 +59,7 @@ fn preview_mesh(ui: &Ui, world: &World, handle: &Handle<dyn Any>, size: [f32; 2]
       state
         .textures
         .entry(handle.name.clone())
-        .or_insert_with(|| Texture::empty()),
+        .or_insert_with(Texture::empty),
       0.0,
     )
   } else {
@@ -69,7 +69,7 @@ fn preview_mesh(ui: &Ui, world: &World, handle: &Handle<dyn Any>, size: [f32; 2]
 
   tex.resize(fb_size[0] as _, fb_size[1] as _);
   state.fb.resize(fb_size[0] as _, fb_size[1] as _);
-  state.fb.bind_tex(&tex);
+  state.fb.bind_tex(tex);
   renderer.resize(fb_size[0] as _, fb_size[1] as _);
   renderer.clear(0.0, 0.0, 0.0, 0.0);
   state.shader.bind();
@@ -99,7 +99,7 @@ fn preview_mesh(ui: &Ui, world: &World, handle: &Handle<dyn Any>, size: [f32; 2]
     .uv0([0.0, 1.0])
     .uv1([1.0, 0.0])
     .build(ui);
-  corner_info(ui, size, format!("Verts: {}", mesh.len));
+  corner_info(ui, size, format!("Verts: {}", mesh.indices.len()));
 }
 
 fn render(world: &mut World, ui: &Ui) {
@@ -124,10 +124,10 @@ fn render(world: &mut World, ui: &Ui) {
         )
         .build()
       {
-        *selected = SelectedAsset(Some((t.clone(), handle.clone())));
+        *selected = SelectedAsset(Some((*t, handle.clone())));
       }
       if let Some(_) = ui.drag_drop_source_config(t.name).begin() {
-        *selected = SelectedAsset(Some((t.clone(), handle.clone())));
+        *selected = SelectedAsset(Some((*t, handle.clone())));
         ui.text(handle.name.clone());
       }
       ui.set_cursor_pos([pos[0] + 18.0, pos[1] + 8.0]);
@@ -159,7 +159,7 @@ fn render(world: &mut World, ui: &Ui) {
         let pos = ui.cursor_pos();
         ui.text(handle.1.name.clone());
         ui.set_cursor_pos([pos[0], pos[1] + 16.0]);
-        ui.text_disabled(handle.0.name.clone());
+        ui.text_disabled(handle.0.name);
         ui.set_cursor_pos([8.0, pos[1] + 54.0]);
         ui.separator();
         match previews.get(&handle.0) {

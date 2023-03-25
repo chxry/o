@@ -6,6 +6,9 @@ edition = "2021"
 [dependencies]
 phosphor = { path = "../phosphor" }
 phosphor_3d = { path = "../phosphor_3d" }
+phosphor_imgui = { path = "../phosphor_imgui" }
 phosphor_fmod = { path = "../phosphor_fmod" }
+phosphor_rapier = { path = "../phosphor_rapier" }
 dolly = "0.4"
+puffin-imgui = "0.20"
 ezlogger = "0.1"

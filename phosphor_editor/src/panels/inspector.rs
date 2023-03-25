@@ -158,7 +158,7 @@ fn inspector_model(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
 
 fn model_default(world: &mut World) -> Box<dyn Any> {
   let assets = world.get_resource::<Assets>().unwrap();
-  Box::new(Model::new(assets.load("cylinder.obj").unwrap()))
+  Box::new(Model::new(assets.load("cube.obj").unwrap()))
 }
 
 fn inspector_material(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
@@ -200,7 +200,7 @@ fn audiosource_default(world: &mut World) -> Box<dyn Any> {
 fn inspector_light(t: &mut Box<dyn Any>, ui: &Ui, _: &mut World) {
   let light: &mut Light = t.downcast_mut().unwrap();
   ui.color_edit3("Color", light.color.as_mut());
-  ui.slider("Strength", 0.1, 5.0, &mut light.strength);
+  ui.slider("Strength", 0.0, 10.0, &mut light.strength);
 }
 
 fn light_default(_: &mut World) -> Box<dyn Any> {
@@ -248,12 +248,11 @@ fn render(world: &mut World, ui: &Ui) {
       }
       ui.popup("addcomponent", || {
         for (t, i) in panels.iter() {
-          if *t != TypeIdNamed::of::<Name>() {
-            if ui.selectable_config(i.label).size([w, 0.0]).build() {
-              mutate(world)
-                .components
-                .push_or_insert(*t, (e.id, (i.default)(mutate(world))));
-            }
+          if *t != TypeIdNamed::of::<Name>() && ui.selectable_config(i.label).size([w, 0.0]).build()
+          {
+            mutate(world)
+              .components
+              .push_or_insert(*t, (e.id, (i.default)(mutate(world))));
           }
         }
       });

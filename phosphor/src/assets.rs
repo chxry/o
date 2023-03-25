@@ -37,9 +37,7 @@ impl Assets {
       }
     };
     trace!("Loading '{}' from '{}'.", t.name, path);
-    if !self.handles.contains_key(&t) {
-      self.handles.insert(t, vec![]);
-    }
+    self.handles.entry(t).or_insert(vec![]);
     let v = self.handles.get_mut(&t).unwrap();
     Ok(match v.iter().find(|h| h.name == path) {
       Some(h) => h.downcast(),

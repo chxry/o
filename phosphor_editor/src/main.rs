@@ -1,4 +1,5 @@
 #![feature(is_some_and)]
+#![allow(clippy::redundant_pattern_matching)]
 mod panels;
 
 use std::fs;
@@ -31,12 +32,20 @@ fn main() -> Result {
       docking: true,
       fonts: &[
         &[
-          ("assets/roboto.ttf", 16.0, None),
-          ("assets/fontawesome.ttf", 14.0, Some(&[0xe005, 0xf8ff, 0])),
+          ("assets/fonts/roboto.ttf", 16.0, None),
+          (
+            "assets/fonts/fontawesome.ttf",
+            14.0,
+            Some(&[0xe005, 0xf8ff, 0]),
+          ),
         ],
         &[
-          ("assets/shingo.otf", 48.0, None),
-          ("assets/fontawesome.ttf", 48.0, Some(&[0xe005, 0xf8ff, 0])),
+          ("assets/fonts/shingo.otf", 48.0, None),
+          (
+            "assets/fonts/fontawesome.ttf",
+            48.0,
+            Some(&[0xe005, 0xf8ff, 0]),
+          ),
         ],
       ],
     })

@@ -1,3 +1,4 @@
+use std::ptr;
 use std::fs::{self, File};
 use std::io::BufReader;
 use std::ffi::{CStr, CString};
@@ -6,7 +7,8 @@ use glfw::{Context, WindowHint, WindowEvent, WindowMode};
 use glam::{Mat4, Vec3};
 use image::imageops;
 use obj::{Obj, TexturedVertex};
-use log::{debug, trace};
+use log::{debug, trace, error};
+use shader_prepper::{ResolvedInclude, ResolvedIncludePath};
 use crate::ecs::World;
 use crate::{Result, asset};
 
@@ -72,34 +74,59 @@ impl Renderer {
   }
 }
 
+struct FileIncludeProvider;
+impl shader_prepper::IncludeProvider for FileIncludeProvider {
+  type IncludeContext = ();
+
+  fn resolve_path(
+    &self,
+    path: &str,
+    _: &Self::IncludeContext,
+  ) -> Result<ResolvedInclude<Self::IncludeContext>> {
+    Ok(ResolvedInclude {
+      resolved_path: ResolvedIncludePath(format!("assets/shaders/{}", path)),
+      context: (),
+    })
+  }
+
+  fn get_include(&mut self, resolved: &ResolvedIncludePath) -> Result<String> {
+    Ok(fs::read_to_string(&resolved.0)?)
+  }
+}
+
+unsafe fn compile_shader(path: &str, ty: u32) -> Result<u32> {
+  trace!("Compiling shader '{}'.", path);
+  let shader = gl::CreateShader(ty);
+  let src = shader_prepper::process_file(path, &mut FileIncludeProvider, ())?
+    .into_iter()
+    .map(|c| c.source)
+    .collect::<Vec<String>>()
+    .join("");
+  gl::ShaderSource(
+    shader,
+    1,
+    &(src.as_bytes().as_ptr().cast()),
+    &(src.len().try_into().unwrap()),
+  );
+  gl::CompileShader(shader);
+  let mut success = 0;
+  gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut success);
+  if success == 0 {
+    let err = CString::from_vec_unchecked(vec![0; 1024]);
+    gl::GetShaderInfoLog(shader, 1024, ptr::null_mut(), err.as_ptr() as _);
+    error!("Failed to compile '{}':\n{}", path, err.to_str()?);
+  }
+  Ok(shader)
+}
+
 #[derive(Copy, Clone)]
 pub struct Shader(pub u32);
 
 impl Shader {
   pub fn new(vert_path: &str, frag_path: &str) -> Result<Self> {
     unsafe {
-      trace!("Compiling shader '{}'.", vert_path);
-      let vert = gl::CreateShader(gl::VERTEX_SHADER);
-      let vert_src = fs::read_to_string(vert_path)?;
-      gl::ShaderSource(
-        vert,
-        1,
-        &(vert_src.as_bytes().as_ptr().cast()),
-        &(vert_src.len().try_into().unwrap()),
-      );
-      gl::CompileShader(vert);
-
-      trace!("Compiling shader '{}'.", frag_path);
-      let frag = gl::CreateShader(gl::FRAGMENT_SHADER);
-      let frag_src = fs::read_to_string(frag_path)?;
-      gl::ShaderSource(
-        frag,
-        1,
-        &(frag_src.as_bytes().as_ptr().cast()),
-        &(frag_src.len().try_into().unwrap()),
-      );
-      gl::CompileShader(frag);
-
+      let vert = compile_shader(vert_path, gl::VERTEX_SHADER)?;
+      let frag = compile_shader(frag_path, gl::FRAGMENT_SHADER)?;
       let program = gl::CreateProgram();
       gl::AttachShader(program, vert);
       gl::AttachShader(program, frag);
@@ -149,19 +176,21 @@ impl Shader {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct Vertex {
   pub pos: [f32; 3],
   pub uv: [f32; 2],
   pub normal: [f32; 3],
 }
 
-#[derive(Copy, Clone)]
 #[asset(load_mesh)]
+#[derive(Clone)]
 pub struct Mesh {
   pub vert_arr: u32,
   pub vert_buf: u32,
   pub idx_buf: u32,
-  pub len: u32,
+  pub vertices: Vec<Vertex>,
+  pub indices: Vec<u32>,
 }
 
 fn load_mesh(_: &mut World, path: &str) -> Result<Mesh> {
@@ -214,7 +243,8 @@ impl Mesh {
         vert_arr,
         vert_buf,
         idx_buf,
-        len: indices.len() as _,
+        vertices: vertices.to_vec(),
+        indices: indices.to_vec(),
       }
     }
   }
@@ -224,7 +254,7 @@ impl Mesh {
       gl::BindVertexArray(self.vert_arr);
       gl::DrawElements(
         gl::TRIANGLES,
-        self.len as _,
+        self.indices.len() as _,
         gl::UNSIGNED_INT,
         std::ptr::null(),
       );
