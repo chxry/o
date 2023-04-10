@@ -1,7 +1,6 @@
 use std::collections::{HashMap, BTreeMap};
 use std::any::{Any, type_name};
 use log::error;
-use nanorand::{Rng, WyRand};
 use serde::{Serialize, Deserialize};
 use crate::{Result, HashMapExt, TypeIdNamed, component, WORLD};
 
@@ -40,9 +39,7 @@ impl World {
   }
 
   pub(crate) fn spawn_empty(&self) -> Entity {
-    Entity {
-      id: WyRand::new().generate(),
-    }
+    Entity { id: rand::random() }
   }
 
   pub fn query<T: Any>(&self) -> Vec<(Entity, &mut T)> {

@@ -5,9 +5,11 @@ use phosphor::log::LevelFilter;
 use phosphor::math::Vec3;
 use phosphor::assets::Assets;
 use phosphor::scene::Scene;
-use phosphor::gfx::{Renderer, Mesh};
+use phosphor::gfx::{Renderer, Mesh, Query};
 use phosphor::glfw::{CursorMode, Key, MouseButton, Action};
-use phosphor_3d::{Transform, Camera, Model, Material, Light, SkySettings, scenerenderer_plugin};
+use phosphor_3d::{
+  Transform, Camera, Model, Material, Light, SkySettings, ScenePerf, scenerenderer_plugin,
+};
 use phosphor_imgui::imgui_plugin;
 use phosphor_imgui::imgui::{Ui, Condition, Drag};
 use phosphor_fmod::{AudioSource, fmod_plugin};
@@ -60,19 +62,17 @@ fn start(world: &mut World) -> Result {
   let garf_mesh = assets.load::<Mesh>("garfield.obj")?;
   world
     .spawn("garf")
-    .insert(
-      Transform::new()
-        .pos(Vec3::new(0.0, 2.0, 2.0))
-        .rot_euler(60.0, 0.0, 0.0),
-    )
+    .insert(Transform::new().pos(Vec3::new(0.0, 0.0, 2.0)))
     .insert(Model::new(garf_mesh.clone()))
-    .insert(Material::Texture {
-      tex: assets.load("garfield.png")?,
+    .insert(Material {
+      color: Vec3::ONE,
+      tex: Some(assets.load("garfield.png")?),
       spec: 0.5,
+      metallic: 0.0,
     })
-    .insert(AudioSource::new(assets.load("portal-radio.mp3")?))
+    // .insert(AudioSource::new(assets.load("portal-radio.mp3")?))
     .insert(
-      ColliderBuilder::trimesh(&garf_mesh)
+      ColliderBuilder::convex_hull(&garf_mesh)
         .attach_rb(garf_rb)
         .mass(1.0)
         .build(world),
@@ -82,9 +82,11 @@ fn start(world: &mut World) -> Result {
     .spawn("floor")
     .insert(Transform::new().scale(Vec3::new(10.0, 0.01, 10.0)))
     .insert(Model::new(assets.load("cube.obj")?))
-    .insert(Material::Color {
+    .insert(Material {
       color: Vec3::splat(0.75),
+      tex: None,
       spec: 0.5,
+      metallic: 0.0,
     })
     .insert(ColliderBuilder::cuboid(10.0, 0.01, 10.0).build(world));
   let ball_rb = RigidBodyBuilder::fixed().build(world);
@@ -92,9 +94,11 @@ fn start(world: &mut World) -> Result {
     .spawn("ball")
     .insert(Transform::new().pos(Vec3::new(0.0, 10.0, 0.0)))
     .insert(Model::new(assets.load("sphere.obj")?))
-    .insert(Material::Color {
+    .insert(Material {
       color: Vec3::X,
+      tex: None,
       spec: 1.0,
+      metallic: 0.0,
     })
     .insert(ColliderBuilder::ball(1.0).attach_rb(ball_rb).build(world))
     .insert(ball_rb);
@@ -110,9 +114,11 @@ fn start(world: &mut World) -> Result {
     .spawn("ball")
     .insert(Transform::new().pos(Vec3::new(0.0, 8.0, 0.0)))
     .insert(Model::new(assets.load("sphere.obj")?))
-    .insert(Material::Color {
+    .insert(Material {
       color: Vec3::Y,
+      tex: None,
       spec: 1.0,
+      metallic: 0.0,
     })
     .insert(ColliderBuilder::ball(1.0).attach_rb(ball2_rb).build(world))
     .insert(ball2_rb);
@@ -128,33 +134,25 @@ fn start(world: &mut World) -> Result {
     .spawn("ball")
     .insert(Transform::new().pos(Vec3::new(1.5, 8.0, 1.5)))
     .insert(Model::new(assets.load("sphere.obj")?))
-    .insert(Material::Color {
+    .insert(Material {
       color: Vec3::Z,
+      tex: None,
       spec: 1.0,
+      metallic: 0.0,
     })
     .insert(ColliderBuilder::ball(1.0).attach_rb(ball3_rb).build(world))
     .insert(ball3_rb);
-
-  insert_light(world, "red", Vec3::X, (2.0, -2.0))?;
-  insert_light(world, "green", Vec3::Y, (0.0, -2.0))?;
-  insert_light(world, "blue", Vec3::Z, (1.0, -4.0))?;
-
-  Scene::save(world, "test.scene".into())?;
-  Ok(())
-}
-
-fn insert_light(world: &mut World, name: &str, col: Vec3, pos: (f32, f32)) -> Result {
   world
-    .spawn(name)
+    .spawn("light")
     .insert(
       Transform::new()
-        .pos(Vec3::new(pos.0, 1.5, pos.1))
+        .pos(Vec3::new(2.0, 1.5, -2.0))
         .scale(Vec3::splat(0.1)),
     )
-    .insert(Light::new(col))
-    .insert(Model::new(
-      world.get_resource::<Assets>().unwrap().load("sphere.obj")?,
-    ));
+    .insert(Model::new(assets.load("sphere.obj")?))
+    .insert(Light::new(Vec3::new(1.0, 0.0, 1.0)));
+
+  Scene::save(world, "test.scene".into())?;
   Ok(())
 }
 
@@ -201,6 +199,14 @@ fn camera(world: &mut World) -> Result {
   Ok(())
 }
 
+fn pass(ui: &Ui, name: &str, query: &mut Query) {
+  ui.text(format!(
+    "{}: {:.4}ms",
+    name,
+    query.get_blocking() as f32 / 1000000.0
+  ));
+}
+
 fn ui(world: &mut World) -> Result {
   let ui = world.get_resource::<Ui>().unwrap();
   ui.window("tools")
@@ -211,10 +217,15 @@ fn ui(world: &mut World) -> Result {
       ui.text(format!("{:.0}fps", ui.io().framerate));
       if let Some(_) = ui.tab_bar("##") {
         if let Some(_) = ui.tab_item("World") {
+          let scene_perf = world.get_resource::<ScenePerf>().unwrap();
           Drag::new("Sun").build_array(
             ui,
             world.get_resource::<SkySettings>().unwrap().dir.as_mut(),
           );
+          pass(ui, "shadow", &mut scene_perf.shadow_pass);
+          pass(ui, "geometry", &mut scene_perf.geometry_pass);
+          pass(ui, "ssao", &mut scene_perf.ssao_pass);
+          pass(ui, "lighting", &mut scene_perf.lighting_pass);
         }
         if let Some(_) = ui.tab_item("Physics") {
           Drag::new("Gravity").build_array(ui, world.get_resource::<Gravity>().unwrap().0.as_mut());

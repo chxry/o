@@ -1,3 +1,4 @@
+use std::ptr;
 use std::ffi::CString;
 use libfmod::{System, Sound as FmodSound, Channel};
 use libfmod::ffi::{
@@ -42,12 +43,12 @@ pub fn fmod_plugin(world: &mut World) -> Result {
       0,
       name.as_ptr() as _,
       64,
-      0 as _,
-      0 as _,
-      0 as _,
-      0 as _,
+      ptr::null_mut(),
+      ptr::null_mut(),
+      ptr::null_mut(),
+      ptr::null_mut(),
     );
-    debug!("Created FMOD {} system on '{}'. ", ver, name.to_str()?);
+    debug!("Initialized FMOD {} system on '{}'. ", ver, name.to_str()?);
     world.add_resource(FmodContext { system, ver });
   }
 

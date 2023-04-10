@@ -69,7 +69,7 @@ fn preview_mesh(ui: &Ui, world: &World, handle: &Handle<dyn Any>, size: [f32; 2]
 
   tex.resize(fb_size[0] as _, fb_size[1] as _);
   state.fb.resize(fb_size[0] as _, fb_size[1] as _);
-  state.fb.bind_tex(tex);
+  state.fb.bind_tex(tex, 0);
   renderer.resize(fb_size[0] as _, fb_size[1] as _);
   renderer.clear(0.0, 0.0, 0.0, 0.0);
   state.shader.bind();
@@ -89,7 +89,6 @@ fn preview_mesh(ui: &Ui, world: &World, handle: &Handle<dyn Any>, size: [f32; 2]
   let mesh = handle.downcast::<Mesh>();
   mesh.draw();
   unsafe {
-    gl::LineWidth(5.0);
     gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
     state.shader.set_vec3("color", &Vec3::ZERO);
     handle.downcast::<Mesh>().draw();

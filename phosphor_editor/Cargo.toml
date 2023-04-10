@@ -9,5 +9,5 @@ phosphor_3d = { path = "../phosphor_3d" }
 phosphor_imgui = { path = "../phosphor_imgui" }
 phosphor_fmod = { path = "../phosphor_fmod" }
 rfd = "0.11"
-# ezlogger = "0.1"
-ezlogger = { path = "../../ezlog" }
+ezlogger = "0.1"
+# ezlogger = { path = "../../ezlog" }

@@ -54,7 +54,7 @@ fn main() -> Result {
     })
     .add_resource(SelectedEntity(None))
     .add_resource(SceneName("".to_string()))
-    .add_resource(Layout("default.ini".to_string()))
+    .add_resource(Layout("Default.ini".to_string()))
     .add_system(stage::INIT, imgui_plugin)
     .add_system(stage::INIT, fmod_plugin)
     .add_system(stage::INIT, setup_panels)

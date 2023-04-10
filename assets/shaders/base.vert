@@ -12,7 +12,7 @@ out vec2 v_uv;
 out vec3 v_normal;
 
 void main() {
-    v_pos = vec3(model * vec4(pos, 1.0));
+    v_pos = (model * vec4(pos, 1.0)).xyz;
     v_uv = uv;
     v_normal = mat3(transpose(inverse(model))) * normal;  
     gl_Position = projection * view * model * vec4(pos, 1.0);

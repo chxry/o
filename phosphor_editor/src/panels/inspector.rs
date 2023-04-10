@@ -163,26 +163,26 @@ fn model_default(world: &mut World) -> Box<dyn Any> {
 
 fn inspector_material(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {
   let mat: &mut Material = t.downcast_mut().unwrap();
-  let mut i = mat.id();
-  ui.combo_simple_string("Type", &mut i, &["Color", "Texture", "Normal"]);
-  if i != mat.id() {
-    *mat = Material::default(world, i);
+  ui.color_edit3("Color", mat.color.as_mut());
+  let mut use_tex = mat.tex.is_some();
+  if ui.checkbox("Texture", &mut use_tex) {
+    mat.tex = use_tex.then(|| {
+      world
+        .get_resource::<Assets>()
+        .unwrap()
+        .load("garfield.png")
+        .unwrap()
+    });
   }
-  match mat {
-    Material::Color { color, spec } => {
-      ui.color_edit3("Color", color.as_mut());
-      ui.slider("Specular", 0.0, 1.0, spec);
-    }
-    Material::Texture { tex, spec } => {
-      asset_picker(ui, "Texture", world, tex);
-      ui.slider("Specular", 0.0, 1.0, spec);
-    }
-    Material::Normal => {}
+  if use_tex {
+    asset_picker(ui, "Texture", world, mat.tex.as_mut().unwrap())
   }
+  ui.slider("Specular", 0.0, 1.0, &mut mat.spec);
+  ui.slider("Metallic", 0.0, 1.0, &mut mat.metallic);
 }
 
-fn material_default(world: &mut World) -> Box<dyn Any> {
-  Box::new(Material::default(world, 0))
+fn material_default(_: &mut World) -> Box<dyn Any> {
+  Box::new(Material::DEFAULT)
 }
 
 fn inspector_audiosource(t: &mut Box<dyn Any>, ui: &Ui, world: &mut World) {

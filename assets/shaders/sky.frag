@@ -1,6 +1,7 @@
 #version 330 core
 in vec3 v_pos;
-out vec4 f_color;
+
+layout(location = 0) out vec4 galbedo;
 
 uniform vec3 sun_dir;
 
@@ -129,5 +130,5 @@ void main() {
     0.758                           // Mie preferred scattering direction
   );
   color = 1.0 - exp(-1.0 * color);
-  f_color = vec4(color, 1.0);
+  galbedo = vec4(color, 0.0);
 }

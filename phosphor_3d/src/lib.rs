@@ -1,15 +1,16 @@
 #![allow(clippy::new_without_default)]
+use std::ptr;
 use phosphor::Result;
-use phosphor::gfx::{Renderer, Shader, Texture, Mesh, Framebuffer, Vertex, gl};
+use phosphor::gfx::{Renderer, Shader, Texture, Mesh, Framebuffer, Vertex, Query, gl};
 use phosphor::ecs::{World, Name, stage};
 use phosphor::math::{Vec3, Quat, Mat4, Vec2, EulerRot};
-use phosphor::assets::{Assets, Handle};
-use phosphor::log::error;
+use phosphor::assets::Handle;
 use phosphor::component;
 use log_once::warn_once;
+use rand::Rng;
 use serde::{Serialize, Deserialize};
 
-const SHADOW_RES: u32 = 4096;
+const SHADOW_RES: u32 = 2048;
 
 #[derive(Serialize, Deserialize)]
 #[component]
@@ -110,42 +111,20 @@ impl Model {
 
 #[derive(Serialize, Deserialize)]
 #[component]
-pub enum Material {
-  Color { color: Vec3, spec: f32 },
-  Texture { tex: Handle<Texture>, spec: f32 },
-  Normal,
+pub struct Material {
+  pub color: Vec3,
+  pub tex: Option<Handle<Texture>>,
+  pub spec: f32,
+  pub metallic: f32,
 }
 
 impl Material {
-  pub fn default(world: &World, id: usize) -> Self {
-    match id {
-      0 => Self::Color {
-        color: Vec3::splat(0.75),
-        spec: 0.5,
-      },
-      1 => Self::Texture {
-        tex: world
-          .get_resource::<Assets>()
-          .unwrap()
-          .load("garfield.png")
-          .unwrap(),
-        spec: 0.5,
-      },
-      2 => Self::Normal,
-      _ => {
-        error!("Unknown material {}.", id);
-        panic!();
-      }
-    }
-  }
-
-  pub fn id(&self) -> usize {
-    match self {
-      Self::Color { .. } => 0,
-      Self::Texture { .. } => 1,
-      Self::Normal => 2,
-    }
-  }
+  pub const DEFAULT: Self = Self {
+    color: Vec3::splat(0.8),
+    tex: None,
+    spec: 0.5,
+    metallic: 0.0,
+  };
 }
 
 #[derive(Serialize, Deserialize)]
@@ -174,53 +153,142 @@ pub struct SkySettings {
 }
 
 struct SceneRenderer {
+  gbuffer: Framebuffer,
+  galbedo: Texture,
+  gposition: Texture,
+  gnormal: Texture,
+  gmaterial: Texture,
+  quad: Mesh,
+  light_shader: Shader,
+  ssao_samples: Vec<Vec3>,
+  ssao_noise: Texture,
+  ssao_fb: Framebuffer,
+  ssao_tex: Texture,
+  ssao_shader: Shader,
   sky_mesh: Mesh,
   sky_shader: Shader,
   shadow_fb: Framebuffer,
   shadow_tex: Texture,
   shadow_shader: Shader,
-  color_shader: Shader,
-  texture_shader: Shader,
-  normal_shader: Shader,
+  default_shader: Shader,
+}
+
+pub struct ScenePerf {
+  pub shadow_pass: Query,
+  pub geometry_pass: Query,
+  pub ssao_pass: Query,
+  pub lighting_pass: Query,
+}
+
+fn gbuf() -> Texture {
+  Texture::new(ptr::null(), 0, 0, gl::RGBA16F, gl::RGBA, gl::FLOAT)
+}
+
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+  a + t * (b - a)
 }
 
 pub fn scenerenderer_plugin(world: &mut World) -> Result {
   world.add_resource(SkySettings {
     dir: Vec2::new(30.0, 300.0),
   });
-  let mut shadow_fb = Framebuffer { fb: 0, rb: 0 };
-  let mut shadow_tex = Texture {
-    id: 0,
-    width: SHADOW_RES,
-    height: SHADOW_RES,
-  };
+  let gbuffer = Framebuffer::new();
+  let galbedo = gbuf();
+  gbuffer.bind_tex(&galbedo, 0);
+  let gposition = gbuf();
+  gbuffer.bind_tex(&gposition, 1);
+  let gnormal = gbuf();
+  gbuffer.bind_tex(&gnormal, 2);
+  let gmaterial = gbuf();
+  gbuffer.bind_tex(&gmaterial, 3);
   unsafe {
-    gl::GenFramebuffers(1, &mut shadow_fb.fb);
-    gl::GenTextures(1, &mut shadow_tex.id);
-    gl::BindTexture(gl::TEXTURE_2D, shadow_tex.id);
-    gl::TexImage2D(
-      gl::TEXTURE_2D,
-      0,
-      gl::DEPTH_COMPONENT as _,
-      SHADOW_RES as _,
-      SHADOW_RES as _,
-      0,
-      gl::DEPTH_COMPONENT,
-      gl::FLOAT,
-      0 as _,
-    );
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
-    gl::BindFramebuffer(gl::FRAMEBUFFER, shadow_fb.fb);
-    gl::FramebufferTexture2D(
-      gl::FRAMEBUFFER,
-      gl::DEPTH_ATTACHMENT,
-      gl::TEXTURE_2D,
-      shadow_tex.id,
-      0,
+    gl::DrawBuffers(
+      4,
+      [
+        gl::COLOR_ATTACHMENT0,
+        gl::COLOR_ATTACHMENT1,
+        gl::COLOR_ATTACHMENT2,
+        gl::COLOR_ATTACHMENT3,
+      ]
+      .as_ptr(),
     );
   }
+
+  let mut rng = rand::thread_rng();
+  let mut ssao_samples = vec![];
+  for i in 0..64 {
+    ssao_samples.push(
+      Vec3::new(
+        rng.gen_range(-1.0..1.0),
+        rng.gen_range(-1.0..1.0),
+        rng.gen_range(0.0..1.0),
+      )
+      .normalize()
+        * rng.gen_range(0.0..1.0)
+        * lerp(0.0, 1.0, (i as f32 / 64.0).powi(2)),
+    );
+  }
+  let mut ssao_noise = vec![];
+  for _ in 0..16 {
+    ssao_noise.push(Vec3::new(
+      rng.gen_range(-1.0..1.0),
+      rng.gen_range(-1.0..1.0),
+      0.0,
+    ));
+  }
+  let ssao_noise = Texture::new(
+    ssao_noise.as_ptr() as _,
+    4,
+    4,
+    gl::RGBA16F,
+    gl::RGB,
+    gl::FLOAT,
+  );
+  let ssao_fb = Framebuffer::new_no_depth();
+  let ssao_tex = Texture::new(ptr::null(), 0, 0, gl::RED, gl::RED, gl::FLOAT);
+  ssao_fb.bind_tex(&ssao_tex, 0);
+
+  let shadow_fb = Framebuffer::new_no_depth();
+  let shadow_tex = Texture::new(
+    ptr::null(),
+    SHADOW_RES,
+    SHADOW_RES,
+    gl::DEPTH_COMPONENT,
+    gl::DEPTH_COMPONENT,
+    gl::FLOAT,
+  );
+  shadow_fb.bind_depth(&shadow_tex);
   world.add_resource(SceneRenderer {
+    gbuffer,
+    galbedo,
+    gposition,
+    gnormal,
+    gmaterial,
+    quad: Mesh::new(
+      &[
+        Vertex {
+          pos: [1.0, 1.0, 0.0],
+          uv: [1.0, 1.0],
+          normal: [0.0, 0.0, 0.0],
+        },
+        Vertex {
+          pos: [1.0, -1.0, 0.0],
+          uv: [1.0, 0.0],
+          normal: [0.0, 0.0, 0.0],
+        },
+        Vertex {
+          pos: [-1.0, -1.0, 0.0],
+          uv: [0.0, 0.0],
+          normal: [0.0, 0.0, 0.0],
+        },
+        Vertex {
+          pos: [-1.0, 1.0, 0.0],
+          uv: [0.0, 1.0],
+          normal: [0.0, 0.0, 0.0],
+        },
+      ],
+      &[0, 1, 3, 1, 2, 3],
+    ),
     sky_mesh: Mesh::new(
       &[
         Vertex {
@@ -246,13 +314,23 @@ pub fn scenerenderer_plugin(world: &mut World) -> Result {
       ],
       &[0, 1, 2, 1, 3, 2],
     ),
+    light_shader: Shader::new("light.vert", "light.frag")?,
+    ssao_samples,
+    ssao_noise,
+    ssao_fb,
+    ssao_tex,
+    ssao_shader: Shader::new("light.vert", "ssao.frag")?,
     sky_shader: Shader::new("sky.vert", "sky.frag")?,
     shadow_fb,
     shadow_tex,
     shadow_shader: Shader::new("shadow.vert", "shadow.frag")?,
-    color_shader: Shader::new("base.vert", "color.frag")?,
-    texture_shader: Shader::new("base.vert", "texture.frag")?,
-    normal_shader: Shader::new("base.vert", "normal.frag")?,
+    default_shader: Shader::new("base.vert", "default.frag")?,
+  });
+  world.add_resource(ScenePerf {
+    shadow_pass: Query::new(),
+    geometry_pass: Query::new(),
+    ssao_pass: Query::new(),
+    lighting_pass: Query::new(),
   });
   world.add_system(stage::DRAW, scenerenderer_draw);
   Ok(())
@@ -270,67 +348,151 @@ fn scenerenderer_draw(world: &mut World) -> Result {
     Some((e, cam)) => match e.get_one::<Transform>() {
       Some(cam_t) => {
         let r = world.get_resource::<SceneRenderer>().unwrap();
+        let perf = world.get_resource::<ScenePerf>().unwrap();
         let sky = world.get_resource::<SkySettings>().unwrap();
         let sun_dir = dir(sky.dir.x, sky.dir.y);
-
-        r.shadow_fb.bind();
-        renderer.resize(SHADOW_RES, SHADOW_RES);
-        renderer.clear(0.0, 0.0, 0.0, 1.0);
         let sun_view = Mat4::look_at_rh(sun_dir, Vec3::ZERO, Vec3::Y);
-        let sun_projection = Mat4::orthographic_rh(-40.0, 40.0, -40.0, 40.0, 0.1, 50.0);
-        r.shadow_shader.bind();
-        r.shadow_shader.set_mat4("view", &sun_view);
-        r.shadow_shader.set_mat4("projection", &sun_projection);
-        for (e, model) in world.query::<Model>() {
-          if model.cast_shadows {
-            if let Some(model_t) = e.get_one::<Transform>() {
-              r.shadow_shader.set_mat4("model", &model_t.as_mat4());
-              model.mesh.draw();
+        // todo calculate this from cam frustum
+        let sun_projection = Mat4::orthographic_rh(-20.0, 20.0, -20.0, 20.0, 0.1, 20.0);
+
+        // shadow pass
+        perf.shadow_pass.time(|| {
+          r.shadow_fb.bind();
+          renderer.resize(SHADOW_RES, SHADOW_RES);
+          renderer.clear(0.0, 0.0, 0.0, 1.0);
+          r.shadow_shader.bind();
+          r.shadow_shader.set_mat4("view", &sun_view);
+          r.shadow_shader.set_mat4("projection", &sun_projection);
+          for (e, model) in world.query::<Model>() {
+            if model.cast_shadows {
+              if let Some(model_t) = e.get_one::<Transform>() {
+                r.shadow_shader.set_mat4("model", &model_t.as_mat4());
+                model.mesh.draw();
+              }
             }
           }
-        }
+        });
 
-        let aspect = match world.get_resource::<SceneDrawOptions>() {
-          Some(o) => {
-            o.fb.bind();
-            renderer.resize(o.size[0] as _, o.size[1] as _);
-            o.size[0] / o.size[1]
-          }
-          None => {
-            Framebuffer::DEFAULT.bind();
-            renderer.resize(w as _, h as _);
-            w as f32 / h as f32
-          }
+        let (fb, w, h) = match world.get_resource::<SceneDrawOptions>() {
+          Some(o) => (o.fb, o.size[0], o.size[1]),
+          None => (Framebuffer::DEFAULT, w as _, h as _),
         };
-        renderer.clear(0.0, 0.0, 0.0, 1.0);
+        let (view, projection) = cam.matrices(cam_t, w / h);
+        // geometry pass
+        perf.geometry_pass.time(|| {
+          r.gbuffer.bind();
+          renderer.resize(w as _, h as _);
+          r.gbuffer.resize(w as _, h as _);
+          r.galbedo.resize(w as _, h as _);
+          r.gposition.resize(w as _, h as _);
+          r.gnormal.resize(w as _, h as _);
+          r.gmaterial.resize(w as _, h as _);
+          r.ssao_fb.resize(w as _, h as _);
+          r.ssao_tex.resize(w as _, h as _);
+          renderer.clear(0.0, 0.0, 0.0, 1.0);
 
-        let (view, projection) = cam.matrices(cam_t, aspect);
+          r.sky_shader.bind();
+          r.sky_shader.set_mat4("view", &view);
+          r.sky_shader.set_mat4("projection", &projection);
+          r.sky_shader.set_vec3("sun_dir", &sun_dir);
+          unsafe {
+            gl::DepthMask(gl::FALSE);
+            r.sky_mesh.draw();
+            gl::DepthMask(gl::TRUE);
+          }
 
-        r.sky_shader.bind();
-        r.sky_shader.set_mat4("view", &view);
-        r.sky_shader.set_mat4("projection", &projection);
-        r.sky_shader.set_vec3("sun_dir", &sun_dir);
-        unsafe {
-          gl::DepthMask(gl::FALSE);
-          r.sky_mesh.draw();
-          gl::DepthMask(gl::TRUE);
-        }
+          r.default_shader.bind();
+          r.default_shader.set_mat4("view", &view);
+          r.default_shader.set_mat4("projection", &projection);
+          for (e, model) in world.query::<Model>() {
+            match e.get_one::<Transform>() {
+              Some(model_t) => {
+                let mat = match e.get_one::<Material>() {
+                  Some(m) => m,
+                  None => &Material::DEFAULT,
+                };
+                match &mat.tex {
+                  Some(tex) => {
+                    tex.bind(0);
+                    r.default_shader.set_i32("use_tex", &1);
+                  }
+                  None => r.default_shader.set_i32("use_tex", &0),
+                };
+                r.default_shader.set_vec3("color", &mat.color);
+                r.default_shader.set_f32("spec", &mat.spec);
+                r.default_shader.set_f32("metallic", &mat.metallic);
+                r.default_shader.set_mat4("model", &model_t.as_mat4());
+                unsafe {
+                  gl::PolygonMode(
+                    gl::FRONT_AND_BACK,
+                    if model.wireframe { gl::LINE } else { gl::FILL },
+                  );
+                }
+                model.mesh.draw();
+              }
+              None => warn_once!(
+                "Mesh on entity '{}'({}) won't be rendered (Missing Transform).",
+                e.get_one::<Name>().map_or("?", |n| &n.0),
+                e.id
+              ),
+            }
+          }
+        });
 
-        for s in [r.color_shader, r.texture_shader, r.normal_shader] {
-          s.bind();
-          s.set_mat4("view", &view);
-          s.set_mat4("projection", &projection);
-          s.set_vec3("cam_pos", &cam_t.position);
-          s.set_vec3("sun_dir", &sun_dir);
-          s.set_mat4("sun_view", &sun_view);
-          s.set_mat4("sun_projection", &sun_projection);
+        // ssao pass
+        perf.ssao_pass.time(|| {
+          r.ssao_fb.bind();
+          renderer.clear(0.0, 0.0, 0.0, 1.0);
+          r.ssao_shader.bind();
+          r.galbedo.bind(0);
+          r.ssao_shader.set_i32("galbedo", &0);
+          r.gposition.bind(1);
+          r.ssao_shader.set_i32("gposition", &1);
+          r.gnormal.bind(2);
+          r.ssao_shader.set_i32("gnormal", &2);
+          r.ssao_noise.bind(3);
+          r.ssao_shader.set_i32("noise", &3);
+          for (i, s) in r.ssao_samples.iter().enumerate() {
+            r.ssao_shader.set_vec3(&format!("samples[{}]", i), s);
+          }
+          r.ssao_shader.set_mat4("view", &view);
+          r.ssao_shader.set_mat4("projection", &projection);
+          r.quad.draw();
+        });
+
+        // lighting pass
+        perf.lighting_pass.time(|| {
+          fb.bind();
+          renderer.clear(0.0, 0.0, 0.0, 1.0);
+          r.light_shader.bind();
+          r.galbedo.bind(0);
+          r.light_shader.set_i32("galbedo", &0);
+          r.gposition.bind(1);
+          r.light_shader.set_i32("gposition", &1);
+          r.gnormal.bind(2);
+          r.light_shader.set_i32("gnormal", &2);
+          r.gmaterial.bind(3);
+          r.light_shader.set_i32("gmaterial", &3);
+          r.ssao_tex.bind(4);
+          r.light_shader.set_i32("ssao_tex", &4);
+          r.shadow_tex.bind(5);
+          r.light_shader.set_mat4("view", &view);
+          r.light_shader.set_mat4("projection", &projection);
+          r.light_shader.set_i32("shadow_map", &5);
+          r.light_shader.set_vec3("cam_pos", &cam_t.position);
+          r.light_shader.set_vec3("sun_dir", &sun_dir);
+          r.light_shader.set_mat4("sun_view", &sun_view);
+          r.light_shader.set_mat4("sun_projection", &sun_projection);
           let lights = world.query::<Light>();
           for (i, (e, light)) in lights.iter().enumerate() {
             match e.get_one::<Transform>() {
               Some(light_t) => {
-                s.set_vec3(&format!("lights[{}].pos", i), &light_t.position);
-                s.set_vec3(&format!("lights[{}].color", i), &light.color);
-                s.set_f32(&format!("lights[{}].strength", i), light.strength);
+                r.light_shader
+                  .set_vec3(&format!("lights[{}].pos", i), &light_t.position);
+                r.light_shader
+                  .set_vec3(&format!("lights[{}].color", i), &light.color);
+                r.light_shader
+                  .set_f32(&format!("lights[{}].strength", i), &light.strength);
               }
               None => warn_once!(
                 "Light on entity '{}'({}) will not be rendered (Missing transform).",
@@ -339,51 +501,9 @@ fn scenerenderer_draw(world: &mut World) -> Result {
               ),
             }
           }
-          s.set_i32("num_lights", lights.len() as _);
-          s.set_i32("shadow_map", 1);
-        }
-
-        r.shadow_tex.bind(1);
-        for (e, model) in world.query::<Model>() {
-          match e.get_one::<Transform>() {
-            Some(model_t) => {
-              let shader = match e
-                .get_one::<Material>()
-                .unwrap_or(&mut Material::default(world, 0))
-              {
-                Material::Color { color, spec } => {
-                  r.color_shader.bind();
-                  r.color_shader.set_vec3("color", color);
-                  r.color_shader.set_f32("specular", *spec);
-                  &r.color_shader
-                }
-                Material::Texture { tex, spec } => {
-                  r.texture_shader.bind();
-                  tex.bind(0);
-                  r.texture_shader.set_f32("specular", *spec);
-                  &r.texture_shader
-                }
-                Material::Normal => {
-                  r.normal_shader.bind();
-                  &r.normal_shader
-                }
-              };
-              shader.set_mat4("model", &model_t.as_mat4());
-              unsafe {
-                gl::PolygonMode(
-                  gl::FRONT_AND_BACK,
-                  if model.wireframe { gl::LINE } else { gl::FILL },
-                );
-              }
-              model.mesh.draw();
-            }
-            None => warn_once!(
-              "Mesh on entity '{}'({}) won't be rendered (Missing Transform).",
-              e.get_one::<Name>().map_or("?", |n| &n.0),
-              e.id
-            ),
-          }
-        }
+          r.light_shader.set_i32("num_lights", &(lights.len() as _));
+          r.quad.draw();
+        });
       }
       None => warn_once!("Scene will not be rendered (Missing camera transform)."),
     },

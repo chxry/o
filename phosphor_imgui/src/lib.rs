@@ -38,7 +38,7 @@ struct UiRenderer {
 pub fn imgui_plugin(world: &mut World) -> Result {
   let renderer = world.get_resource::<Renderer>().unwrap();
   let mut ctx = Context::create();
-  debug!("Created ImGui {} context.", imgui::dear_imgui_version());
+  debug!("Initialized ImGui {} context.", imgui::dear_imgui_version());
   let options = match world.get_resource::<UiRendererOptions>() {
     Some(o) => o,
     None => &UiRendererOptions::DEFAULT,
@@ -94,8 +94,17 @@ pub fn imgui_plugin(world: &mut World) -> Result {
     );
   }
   let font_tex = fonts.build_rgba32_texture();
-  fonts.tex_id =
-    TextureId::new(Texture::new(font_tex.data, font_tex.width, font_tex.height).id as _);
+  fonts.tex_id = TextureId::new(
+    Texture::new(
+      font_tex.data.as_ptr(),
+      font_tex.width,
+      font_tex.height,
+      gl::SRGB_ALPHA,
+      gl::RGBA,
+      gl::UNSIGNED_BYTE,
+    )
+    .id as _,
+  );
   let style = ctx.style_mut();
   theme_dark(style);
   style.window_rounding = 4.0;
@@ -119,6 +128,12 @@ pub fn imgui_plugin(world: &mut World) -> Result {
     gl::VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, 20, 8 as _);
     gl::EnableVertexAttribArray(2);
     gl::VertexAttribPointer(2, 4, gl::UNSIGNED_BYTE, gl::TRUE, 20, 16 as _);
+    gl::BlendFuncSeparate(
+      gl::SRC_ALPHA,
+      gl::ONE_MINUS_SRC_ALPHA,
+      gl::ONE,
+      gl::ONE_MINUS_SRC_ALPHA,
+    );
   }
   world.add_resource(ctx);
   world.add_resource(UiRenderer {
@@ -209,6 +224,7 @@ fn imgui_draw(world: &mut World) -> Result {
     let r = world.get_resource::<UiRenderer>().unwrap();
     let ctx = world.get_resource::<Context>().unwrap();
     unsafe {
+      gl::Enable(gl::BLEND);
       gl::Disable(gl::DEPTH_TEST);
       gl::BindVertexArray(r.vert_arr);
       let io = ctx.io_mut();
@@ -282,6 +298,7 @@ fn imgui_draw(world: &mut World) -> Result {
         }
       }
       gl::Enable(gl::DEPTH_TEST);
+      gl::Disable(gl::BLEND);
     }
   }
   Ok(())

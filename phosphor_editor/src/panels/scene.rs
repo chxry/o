@@ -22,7 +22,7 @@ pub fn init(world: &mut World) -> Result<Panel> {
   load(world);
   let fb = Framebuffer::new();
   let tex = Texture::empty();
-  fb.bind_tex(&tex);
+  fb.bind_tex(&tex, 0);
   world.add_resource(SceneState {
     size: [0.0, 0.0],
     focused: false,

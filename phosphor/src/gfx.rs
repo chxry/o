@@ -39,16 +39,9 @@ impl Renderer {
       gl::Enable(gl::LINE_SMOOTH);
       gl::Enable(gl::DEPTH_TEST);
       gl::Enable(gl::SCISSOR_TEST);
-      gl::Enable(gl::BLEND);
-      gl::BlendFuncSeparate(
-        gl::SRC_ALPHA,
-        gl::ONE_MINUS_SRC_ALPHA,
-        gl::ONE,
-        gl::ONE_MINUS_SRC_ALPHA,
-      );
       let version = CStr::from_ptr(gl::GetString(gl::VERSION) as _).to_str()?;
       let renderer = CStr::from_ptr(gl::GetString(gl::RENDERER) as _).to_str()?;
-      debug!("Created OpenGL {} renderer on '{}'.", version, renderer);
+      debug!("Initialized OpenGL {} renderer on '{}'.", version, renderer);
       Ok(Self {
         glfw,
         window,
@@ -162,15 +155,15 @@ impl Shader {
     unsafe { gl::ProgramUniform3fv(self.0 as _, self.get_loc(name), 1, val.to_array().as_ptr()) }
   }
 
-  pub fn set_i32(&self, name: &str, val: i32) {
+  pub fn set_i32(&self, name: &str, val: &i32) {
     unsafe {
-      gl::ProgramUniform1i(self.0 as _, self.get_loc(name), val);
+      gl::ProgramUniform1i(self.0 as _, self.get_loc(name), *val);
     }
   }
 
-  pub fn set_f32(&self, name: &str, val: f32) {
+  pub fn set_f32(&self, name: &str, val: &f32) {
     unsafe {
-      gl::ProgramUniform1f(self.0 as _, self.get_loc(name), val);
+      gl::ProgramUniform1f(self.0 as _, self.get_loc(name), *val);
     }
   }
 }
@@ -268,66 +261,73 @@ pub struct Texture {
   pub id: u32,
   pub width: u32,
   pub height: u32,
+  pub iformat: u32,
+  pub format: u32,
+  pub typ: u32,
 }
 
 fn load_tex(_: &mut World, path: &str) -> Result<Texture> {
   let mut img = image::open(path)?.to_rgba8();
   imageops::flip_vertical_in_place(&mut img);
-  Ok(Texture::new(img.as_raw(), img.width(), img.height()))
+  Ok(Texture::new(
+    img.as_ptr(),
+    img.width(),
+    img.height(),
+    gl::SRGB_ALPHA,
+    gl::RGBA,
+    gl::UNSIGNED_BYTE,
+  ))
 }
 
 impl Texture {
-  pub fn new(data: &[u8], width: u32, height: u32) -> Self {
+  pub fn new(
+    data: *const u8,
+    width: u32,
+    height: u32,
+    iformat: u32,
+    format: u32,
+    typ: u32,
+  ) -> Self {
     unsafe {
       let mut tex = 0;
       gl::GenTextures(1, &mut tex);
       gl::BindTexture(gl::TEXTURE_2D, tex);
       gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
       gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
+      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as _);
+      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as _);
       gl::TexImage2D(
         gl::TEXTURE_2D,
         0,
-        gl::SRGB_ALPHA as _,
+        iformat as _,
         width as _,
         height as _,
         0,
-        gl::RGBA,
-        gl::UNSIGNED_BYTE,
-        data.as_ptr() as _,
+        format,
+        typ,
+        data as _,
       );
+
       Self {
         id: tex,
         width,
         height,
+        iformat,
+        format,
+        typ,
       }
     }
   }
 
   pub fn empty() -> Self {
-    unsafe {
-      let mut tex = 0;
-      gl::GenTextures(1, &mut tex);
-      gl::BindTexture(gl::TEXTURE_2D, tex);
-      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
-      gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
-      gl::TexImage2D(
-        gl::TEXTURE_2D,
-        0,
-        gl::SRGB_ALPHA as _,
-        0,
-        0,
-        0,
-        gl::RGBA,
-        gl::UNSIGNED_BYTE,
-        0 as _,
-      );
-
-      Self {
-        id: tex,
-        width: 0,
-        height: 0,
-      }
-    }
+    Self::new(
+      ptr::null(),
+      0,
+      0,
+      gl::SRGB_ALPHA,
+      gl::RGBA,
+      gl::UNSIGNED_BYTE,
+    )
   }
 
   pub fn bind(&self, unit: u32) {
@@ -343,13 +343,13 @@ impl Texture {
       gl::TexImage2D(
         gl::TEXTURE_2D,
         0,
-        gl::SRGB_ALPHA as _,
+        self.iformat as _,
         width as _,
         height as _,
         0,
-        gl::RGBA,
-        gl::UNSIGNED_BYTE,
-        0 as _,
+        self.format,
+        self.typ,
+        ptr::null(),
       );
       self.width = width;
       self.height = height;
@@ -368,20 +368,26 @@ impl Framebuffer {
 
   pub fn new() -> Self {
     unsafe {
-      let mut fb = 0;
-      gl::GenFramebuffers(1, &mut fb);
-      gl::BindFramebuffer(gl::FRAMEBUFFER, fb);
-      let mut rb = 0;
-      gl::GenRenderbuffers(1, &mut rb);
-      gl::BindRenderbuffer(gl::RENDERBUFFER, rb);
+      let mut s = Self::new_no_depth();
+      gl::GenRenderbuffers(1, &mut s.rb);
+      gl::BindRenderbuffer(gl::RENDERBUFFER, s.rb);
       gl::RenderbufferStorage(gl::RENDERBUFFER, gl::DEPTH24_STENCIL8, 0, 0);
       gl::FramebufferRenderbuffer(
         gl::FRAMEBUFFER,
         gl::DEPTH_STENCIL_ATTACHMENT,
         gl::RENDERBUFFER,
-        rb,
+        s.rb,
       );
-      Self { fb, rb }
+      s
+    }
+  }
+
+  pub fn new_no_depth() -> Self {
+    unsafe {
+      let mut fb = 0;
+      gl::GenFramebuffers(1, &mut fb);
+      gl::BindFramebuffer(gl::FRAMEBUFFER, fb);
+      Self { fb, rb: 0 }
     }
   }
 
@@ -391,12 +397,25 @@ impl Framebuffer {
     }
   }
 
-  pub fn bind_tex(&self, tex: &Texture) {
+  pub fn bind_tex(&self, tex: &Texture, unit: u32) {
     unsafe {
       self.bind();
       gl::FramebufferTexture2D(
         gl::FRAMEBUFFER,
-        gl::COLOR_ATTACHMENT0,
+        gl::COLOR_ATTACHMENT0 + unit,
+        gl::TEXTURE_2D,
+        tex.id,
+        0,
+      );
+    }
+  }
+
+  pub fn bind_depth(&self, tex: &Texture) {
+    unsafe {
+      self.bind();
+      gl::FramebufferTexture2D(
+        gl::FRAMEBUFFER,
+        gl::DEPTH_ATTACHMENT,
         gl::TEXTURE_2D,
         tex.id,
         0,
@@ -413,6 +432,46 @@ impl Framebuffer {
         width as _,
         height as _,
       );
+    }
+  }
+}
+
+pub struct Query(u32);
+
+impl Query {
+  pub fn new() -> Self {
+    unsafe {
+      let mut id = 0;
+      gl::GenQueries(1, &mut id);
+      Self(id)
+    }
+  }
+
+  pub fn time<F: FnMut()>(&self, mut f: F) {
+    unsafe {
+      gl::BeginQuery(gl::TIME_ELAPSED, self.0);
+      f();
+      gl::EndQuery(gl::TIME_ELAPSED);
+    }
+  }
+
+  pub fn get_blocking(&mut self) -> u64 {
+    unsafe {
+      let mut v = 0;
+      gl::GetQueryObjectui64v(self.0, gl::QUERY_RESULT, &mut v);
+      v
+    }
+  }
+
+  pub fn get(&mut self) -> Option<u64> {
+    unsafe {
+      let mut avail = 0;
+      gl::GetQueryObjectiv(self.0, gl::QUERY_RESULT_AVAILABLE, &mut avail);
+      if avail > 0 {
+        Some(self.get_blocking())
+      } else {
+        None
+      }
     }
   }
 }
