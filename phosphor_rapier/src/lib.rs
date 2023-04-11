@@ -78,6 +78,13 @@ impl ColliderBuilder {
     }
   }
 
+  pub fn cone(h: f32, r: f32) -> Self {
+    ColliderBuilder {
+      b: RapierColliderBuilder::cone(h, r),
+      rb: None,
+    }
+  }
+
   pub fn convex_hull(mesh: &Mesh) -> Self {
     Self {
       b: RapierColliderBuilder::convex_hull(

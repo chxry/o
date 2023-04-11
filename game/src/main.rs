@@ -8,7 +8,7 @@ use phosphor::scene::Scene;
 use phosphor::gfx::{Renderer, Mesh, Query};
 use phosphor::glfw::{CursorMode, Key, MouseButton, Action};
 use phosphor_3d::{
-  Transform, Camera, Model, Material, Light, SkySettings, ScenePerf, scenerenderer_plugin,
+  Transform, Camera, Model, Material, Light, SkySettings, ScenePerf, Tonemap, scenerenderer_plugin,
 };
 use phosphor_imgui::imgui_plugin;
 use phosphor_imgui::imgui::{Ui, Condition, Drag};
@@ -19,6 +19,7 @@ use puffin_imgui::ProfilerUi;
 use dolly::rig::CameraRig;
 use dolly::handedness::RightHanded;
 use dolly::drivers::{Position, YawPitch, Smooth};
+use rand::Rng;
 
 struct LastPos(f32, f32);
 
@@ -68,13 +69,12 @@ fn start(world: &mut World) -> Result {
       color: Vec3::ONE,
       tex: Some(assets.load("garfield.png")?),
       spec: 0.5,
-      metallic: 0.0,
+      metallic: 0.5,
     })
-    // .insert(AudioSource::new(assets.load("portal-radio.mp3")?))
+    .insert(AudioSource::new(assets.load("portal-radio.mp3")?))
     .insert(
-      ColliderBuilder::convex_hull(&garf_mesh)
+      ColliderBuilder::trimesh(&garf_mesh)
         .attach_rb(garf_rb)
-        .mass(1.0)
         .build(world),
     )
     .insert(garf_rb);
@@ -86,62 +86,9 @@ fn start(world: &mut World) -> Result {
       color: Vec3::splat(0.75),
       tex: None,
       spec: 0.5,
-      metallic: 0.0,
+      metallic: 0.5,
     })
     .insert(ColliderBuilder::cuboid(10.0, 0.01, 10.0).build(world));
-  let ball_rb = RigidBodyBuilder::fixed().build(world);
-  world
-    .spawn("ball")
-    .insert(Transform::new().pos(Vec3::new(0.0, 10.0, 0.0)))
-    .insert(Model::new(assets.load("sphere.obj")?))
-    .insert(Material {
-      color: Vec3::X,
-      tex: None,
-      spec: 1.0,
-      metallic: 0.0,
-    })
-    .insert(ColliderBuilder::ball(1.0).attach_rb(ball_rb).build(world))
-    .insert(ball_rb);
-
-  let ball2_rb = RigidBodyBuilder::dynamic().build(world);
-  world.get_resource::<ImpulseJointSet>().unwrap().insert(
-    ball_rb.handle,
-    ball2_rb.handle,
-    RopeJointBuilder::new().limits([0.5, 2.0]),
-    true,
-  );
-  world
-    .spawn("ball")
-    .insert(Transform::new().pos(Vec3::new(0.0, 8.0, 0.0)))
-    .insert(Model::new(assets.load("sphere.obj")?))
-    .insert(Material {
-      color: Vec3::Y,
-      tex: None,
-      spec: 1.0,
-      metallic: 0.0,
-    })
-    .insert(ColliderBuilder::ball(1.0).attach_rb(ball2_rb).build(world))
-    .insert(ball2_rb);
-
-  let ball3_rb = RigidBodyBuilder::dynamic().build(world);
-  world.get_resource::<ImpulseJointSet>().unwrap().insert(
-    ball2_rb.handle,
-    ball3_rb.handle,
-    RopeJointBuilder::new().limits([0.5, 2.0]),
-    true,
-  );
-  world
-    .spawn("ball")
-    .insert(Transform::new().pos(Vec3::new(1.5, 8.0, 1.5)))
-    .insert(Model::new(assets.load("sphere.obj")?))
-    .insert(Material {
-      color: Vec3::Z,
-      tex: None,
-      spec: 1.0,
-      metallic: 0.0,
-    })
-    .insert(ColliderBuilder::ball(1.0).attach_rb(ball3_rb).build(world))
-    .insert(ball3_rb);
   world
     .spawn("light")
     .insert(
@@ -152,7 +99,6 @@ fn start(world: &mut World) -> Result {
     .insert(Model::new(assets.load("sphere.obj")?))
     .insert(Light::new(Vec3::new(1.0, 0.0, 1.0)));
 
-  Scene::save(world, "test.scene".into())?;
   Ok(())
 }
 
@@ -217,15 +163,65 @@ fn ui(world: &mut World) -> Result {
       ui.text(format!("{:.0}fps", ui.io().framerate));
       if let Some(_) = ui.tab_bar("##") {
         if let Some(_) = ui.tab_item("World") {
-          let scene_perf = world.get_resource::<ScenePerf>().unwrap();
           Drag::new("Sun").build_array(
             ui,
             world.get_resource::<SkySettings>().unwrap().dir.as_mut(),
           );
+
+          if ui.button("Spawn object") {
+            let assets = world.get_resource::<Assets>().unwrap();
+            let mut rng = rand::thread_rng();
+            let (mesh, collider) = match rng.gen_range(0..=2) {
+              0 => ("sphere.obj", ColliderBuilder::ball(0.5)),
+              1 => ("cube.obj", ColliderBuilder::cuboid(0.5, 0.5, 0.5)),
+              2 => ("cone.obj", ColliderBuilder::cone(0.5, 0.5)),
+              _ => unreachable!(),
+            };
+            let rb = RigidBodyBuilder::dynamic().build(world);
+            world
+              .spawn("object")
+              .insert(
+                Transform::new()
+                  .pos(Vec3::new(
+                    rng.gen_range(-1.0..1.0),
+                    rng.gen_range(5.0..7.0),
+                    rng.gen_range(-1.0..1.0),
+                  ))
+                  .scale(Vec3::splat(0.5)),
+              )
+              .insert(Model::new(assets.load(mesh).unwrap()))
+              .insert(collider.attach_rb(rb).build(world))
+              .insert(Material {
+                color: Vec3::new(
+                  rng.gen_range(0.0..1.0),
+                  rng.gen_range(0.0..1.0),
+                  rng.gen_range(0.0..1.0),
+                ),
+                tex: None,
+                spec: 0.5,
+                metallic: 0.5,
+              })
+              .insert(rb);
+          }
+
+          if ui.button("Save scene") {
+            Scene::save(world, "test.scene".into()).unwrap();
+          }
+        }
+        if let Some(_) = ui.tab_item("Graphics") {
+          let scene_perf = world.get_resource::<ScenePerf>().unwrap();
           pass(ui, "shadow", &mut scene_perf.shadow_pass);
           pass(ui, "geometry", &mut scene_perf.geometry_pass);
           pass(ui, "ssao", &mut scene_perf.ssao_pass);
           pass(ui, "lighting", &mut scene_perf.lighting_pass);
+          let tonemap = world.get_resource::<Tonemap>().unwrap();
+          if let Some(_) = ui.begin_combo("Tonemap", tonemap.name()) {
+            for t in Tonemap::ALL {
+              if ui.selectable(t.name()) {
+                *tonemap = t;
+              }
+            }
+          }
         }
         if let Some(_) = ui.tab_item("Physics") {
           Drag::new("Gravity").build_array(ui, world.get_resource::<Gravity>().unwrap().0.as_mut());

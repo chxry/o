@@ -9,7 +9,7 @@ uniform vec3 samples[64];
 uniform mat4 view;
 uniform mat4 projection;
 
-float radius = 0.7;
+float radius = 0.5;
 float bias = 0.025;
 
 out float f_color;

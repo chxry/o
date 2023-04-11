@@ -370,6 +370,7 @@ dependencies = [
  "phosphor_imgui",
  "phosphor_rapier",
  "puffin-imgui",
+ "rand",
 ]
 
 [[package]]

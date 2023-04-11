@@ -11,4 +11,5 @@ phosphor_fmod = { path = "../phosphor_fmod" }
 phosphor_rapier = { path = "../phosphor_rapier" }
 dolly = "0.4"
 puffin-imgui = "0.20"
+rand = "0.8"
 ezlogger = "0.1"

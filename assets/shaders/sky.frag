@@ -129,6 +129,5 @@ void main() {
     1.2e3,                          // Mie scale height
     0.758                           // Mie preferred scattering direction
   );
-  color = 1.0 - exp(-1.0 * color);
   galbedo = vec4(color, 0.0);
 }

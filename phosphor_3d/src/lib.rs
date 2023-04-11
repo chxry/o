@@ -10,7 +10,7 @@ use log_once::warn_once;
 use rand::Rng;
 use serde::{Serialize, Deserialize};
 
-const SHADOW_RES: u32 = 2048;
+const SHADOW_RES: u32 = 4096;
 
 #[derive(Serialize, Deserialize)]
 #[component]
@@ -180,6 +180,27 @@ pub struct ScenePerf {
   pub lighting_pass: Query,
 }
 
+#[derive(Copy, Clone)]
+pub enum Tonemap {
+  Aces,
+  Filmic,
+  Reinhard,
+  Uncharted2,
+}
+
+impl Tonemap {
+  pub const ALL: [Self; 4] = [Self::Aces, Self::Filmic, Self::Reinhard, Self::Uncharted2];
+
+  pub fn name(&self) -> &str {
+    match self {
+      Self::Aces => "Aces",
+      Self::Filmic => "Filmic",
+      Self::Reinhard => "Reinhard",
+      Self::Uncharted2 => "Uncharted2",
+    }
+  }
+}
+
 fn gbuf() -> Texture {
   Texture::new(ptr::null(), 0, 0, gl::RGBA16F, gl::RGBA, gl::FLOAT)
 }
@@ -190,7 +211,7 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
 
 pub fn scenerenderer_plugin(world: &mut World) -> Result {
   world.add_resource(SkySettings {
-    dir: Vec2::new(30.0, 300.0),
+    dir: Vec2::new(30.0, 320.0),
   });
   let gbuffer = Framebuffer::new();
   let galbedo = gbuf();
@@ -332,6 +353,7 @@ pub fn scenerenderer_plugin(world: &mut World) -> Result {
     ssao_pass: Query::new(),
     lighting_pass: Query::new(),
   });
+  world.add_resource(Tonemap::Reinhard);
   world.add_system(stage::DRAW, scenerenderer_draw);
   Ok(())
 }
@@ -353,7 +375,7 @@ fn scenerenderer_draw(world: &mut World) -> Result {
         let sun_dir = dir(sky.dir.x, sky.dir.y);
         let sun_view = Mat4::look_at_rh(sun_dir, Vec3::ZERO, Vec3::Y);
         // todo calculate this from cam frustum
-        let sun_projection = Mat4::orthographic_rh(-20.0, 20.0, -20.0, 20.0, 0.1, 20.0);
+        let sun_projection = Mat4::orthographic_rh(-15.0, 15.0, -15.0, 15.0, 0.1, 15.0);
 
         // shadow pass
         perf.shadow_pass.time(|| {
@@ -483,6 +505,12 @@ fn scenerenderer_draw(world: &mut World) -> Result {
           r.light_shader.set_vec3("sun_dir", &sun_dir);
           r.light_shader.set_mat4("sun_view", &sun_view);
           r.light_shader.set_mat4("sun_projection", &sun_projection);
+          r.light_shader.set_i32(
+            "tonemap",
+            &(*world
+              .get_resource::<Tonemap>()
+              .unwrap_or(&mut Tonemap::Aces) as i32),
+          );
           let lights = world.query::<Light>();
           for (i, (e, light)) in lights.iter().enumerate() {
             match e.get_one::<Transform>() {
