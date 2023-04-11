@@ -1,0 +1,371 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Phosphor Documentation</title>
+        <meta name="robots" content="noindex" />
+        <!-- Custom HTML head -->
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded affix "><li class="part-title">User Guide</li><li class="chapter-item expanded "><a href="project.html"><strong aria-hidden="true">1.</strong> Project Setup</a></li><li class="chapter-item expanded "><a href="ecs.html"><strong aria-hidden="true">2.</strong> ECS Introduction</a></li><li class="chapter-item expanded affix "><li class="part-title">Plugins</li><li class="chapter-item expanded "><a href="3d.html"><strong aria-hidden="true">3.</strong> phosphor_3d</a></li><li class="chapter-item expanded "><a href="ui.html"><strong aria-hidden="true">4.</strong> phosphor_ui</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Phosphor Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h2 id="very-work-in-progress"><a class="header" href="#very-work-in-progress">very work in progress!!</a></h2>
+<h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+<p><strong>Phosphor</strong> is a modular and data-driven game engine build in Rust. It is build around the Entity Component System pattern for simple and efficient game logic while still being powerful and extensible.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="project-setup"><a class="header" href="#project-setup">Project Setup</a></h1>
+<h2 id="create-a-cargo-project"><a class="header" href="#create-a-cargo-project">Create a Cargo project</a></h2>
+<p>You can use Phosphor with any other Rust dependencies with Cargo.</p>
+<p>Run the following commands to setup your project.</p>
+<pre><code class="language-sh">cargo new my_game
+cd my_game
+</code></pre>
+<h2 id="add-phosphor-as-a-dependency"><a class="header" href="#add-phosphor-as-a-dependency">Add Phosphor as a dependency</a></h2>
+<p>Phosphor is not yet on crates.io. For now you can include it locally by adding this to your <code>Cargo.toml</code>.</p>
+<pre><code class="language-toml">[dependencies]
+phosphor = { path = &quot;../phosphor&quot; }
+</code></pre>
+<h2 id="build-phosphor"><a class="header" href="#build-phosphor">Build Phosphor</a></h2>
+<p>Add the following code to your <code>src/main.rs</code>.</p>
+<pre><code class="language-rs">use phosphor::{Engine,Result};
+
+fn main() -&gt; Result&lt;()&gt; {
+  Engine::new().run()
+}
+</code></pre>
+<p>Now run your project with <code>cargo run</code>.</p>
+<h2 id="logging"><a class="header" href="#logging">Logging</a></h2>
+<p>The previous code will only show a black window for now, but first lets add a logger to help us debug in the future.</p>
+<p>Add a logger of your choice to the <code>Cargo.toml</code> (This example uses <a href="https://crates.io/crates/env_logger">env_logger</a>).</p>
+<pre><code class="language-toml">[dependencies]
+phosphor = { path = &quot;../phosphor&quot; }
+env_logger = &quot;0.9&quot;
+</code></pre>
+<pre><code class="language-rs">use phosphor::{Engine, Result};
+use phosphor::log::LevelFilter;
+
+fn main() -&gt; Result&lt;()&gt; {
+  env_logger::builder().filter_level(LevelFilter::Info).init();
+  Engine::new().run()
+}
+</code></pre>
+<p>Now after running <code>cargo run</code> you should see something similar to the following in your terminal.</p>
+<pre><code>[2022-11-03T20:50:09Z INFO  winit::platform_impl::platform::x11::window] Guessed window scale factor: 1.1666666666666667
+[2022-11-03T20:50:09Z INFO  phosphor::gfx] Created renderer: NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2
+</code></pre>
+<p>Now we have our project setup we can begin creating our game.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="ecs-introduction"><a class="header" href="#ecs-introduction">ECS Introduction</a></h1>
+<p>Phosphor is built around an Entity Component System, which is often shortened to ECS. This means our project's logic and data is broken up into the following groups:</p>
+<ul>
+<li><strong>Entities:</strong> Entities are an identifier for things in our game. They contain no data except a unique identifier.</li>
+<li><strong>Components:</strong> Components are Rust structs that are attached to our entities. Any Rust type can be a component, for example <code>Transform</code>, which is used to represent the location of entities in a scene.</li>
+<li><strong>Systems:</strong> Systems are functions that are run at specific stages of our game. For example the following system prints the position of entities in a scene.</li>
+</ul>
+<pre><code class="language-rs">fn print_positions(world: &amp;mut World) -&gt; Result&lt;()&gt; {
+  for (_, transform) in world.query::&lt;Transform&gt;() {
+    info!(&quot;{}&quot;, transform.position);
+  }
+  Ok(())
+}
+</code></pre>
+<ul>
+<li><strong>Resources:</strong> Resources are used to represent global data. They can be any Rust type, for example <code>Renderer</code>, which holds window state.</li>
+</ul>
+<h2 id="creating-a-system"><a class="header" href="#creating-a-system">Creating a system</a></h2>
+<p>A system can be any function with the signature <code>fn sys(world: &amp;mut World) -&gt; Result&lt;()&gt;</code>.</p>
+<p>Lets create our first system and run it on startup. First import <code>World</code> and <code>Stage</code> from <code>phosphor::ecs</code>, and also <code>info</code> from <code>phosphor::log</code>.</p>
+<pre><code class="language-rs">use phosphor::ecs::{World, Stage};
+use phosphor::log::{LevelFilter, info};
+</code></pre>
+<p>Now we can define our system and add run it on <code>Stage::Start</code>.</p>
+<pre><code class="language-rs">fn main() -&gt; Result&lt;()&gt; {
+  ...
+  Engine::new()
+    .add_system(Stage::Start, &amp;hello)
+    .run()
+}
+
+fn hello(world: &amp;mut World) -&gt; Result&lt;()&gt; {
+  info!(&quot;Hello Phosphor!&quot;);
+  Ok(())
+}
+</code></pre>
+<p>After running our game we should see the following in our terminal:</p>
+<pre><code>[2022-11-03T21:30:13Z INFO  game] Hello Phosphor!
+</code></pre>
+<h2 id="creating-components"><a class="header" href="#creating-components">Creating components</a></h2>
+<p>Lets add an entity with a <code>Health(u8)</code> component. We can create our entity using <code>world.spawn()</code> and use <code>entity.insert()</code> to attach any type as a component.</p>
+<pre><code class="language-rs">struct Health(u8);
+
+fn hello(world: &amp;mut World) -&gt; Result&lt;()&gt; {
+  world.spawn(&quot;player&quot;).insert(Health(100));
+  Ok(())
+}
+</code></pre>
+<h2 id="accessing-components"><a class="header" href="#accessing-components">Accessing components</a></h2>
+<p>After running our game, we won't see anything, so lets create a system to check the health of our entity, using <code>world.query()</code> to get all the components of a type.</p>
+<pre><code class="language-rs">fn main() -&gt; Result&lt;()&gt; {
+  ...
+  Engine::new()
+    .add_system(Stage::Start, &amp;hello)
+    .add_system(Stage::Draw, &amp;health_check)
+    .run()
+}
+
+
+fn health_check(world: &amp;mut World) -&gt; Result&lt;()&gt; {
+  let (entity, health) = &amp;world.query::&lt;Health&gt;()[0];
+  info!(&quot;Entity {} has a health of {}.&quot;, entity.id, health.0);
+  Ok(())
+}
+</code></pre>
+<p>After runnning our game we should see the following repeated in our terminal:</p>
+<pre><code>[2022-11-03T21:41:31Z INFO  game] Entity 1 has a health of 100.
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="phosphor_3d-guide"><a class="header" href="#phosphor_3d-guide">phosphor_3d Guide</a></h1>
+<p>The <code>phosphor_3d</code> crate allows us to render 3D scenes. To use it first enable the <code>scenerenderer</code> system.</p>
+<pre><code class="language-rs">use phosphor_3d::scenerenderer;
+
+fn main() -&gt; Result&lt;()&gt; {
+  ...
+  Engine::new()
+    .add_system(Stage::Start, &amp;scenerenderer)
+    .run()
+}
+</code></pre>
+<p>We won't see a difference since our scene is empty, so lets download a <a href="https://raw.githubusercontent.com/chxry/o/master/res/teapot.obj">model</a>.</p>
+<p>Now we can use a start system to add a <code>Camera</code> and <code>Mesh</code> to the scene. Both entities will also need a <code>Transform</code> to represent their position. We will need to use the <code>Renderer</code> resource to create our mesh.</p>
+<pre><code class="language-rs">use phosphor_3d::{Camera, Transform, scenerenderer};
+use phosphor::gfx::{Renderer, Mesh};
+use phosphor::math::Vec3;
+
+fn main() -&gt; Result&lt;()&gt; {
+  ...
+  Engine::new()
+    .add_system(Stage::Start, &amp;scenerenderer)
+    .add_system(Stage::Start, &amp;setup)
+    .run()
+}
+
+fn setup(world: &amp;mut World) -&gt; Result&lt;()&gt; {
+  let renderer = world.get_resource::&lt;Renderer&gt;().unwrap();
+  world
+    .spawn(&quot;cam&quot;)
+    .insert(
+      Transform::new()
+        .pos(Vec3::new(0.0, 1.0, -10.0))
+        .rot_euler(Vec3::new(0.0, 0.0, 1.5)),
+    )
+    .insert(Camera::new(0.8, 0.1..100.0));
+  world
+    .spawn(&quot;teapot&quot;)
+    .insert(Transform::new())
+    .insert(Mesh::load(renderer, &quot;teapot.obj&quot;)?);
+  Ok(())
+}
+</code></pre>
+<p>After running our game we should now see a blank teapot.</p>
+<h2 id="textures"><a class="header" href="#textures">Textures</a></h2>
+<p>Lets add a texture to our teapot, first download a <a href="https://raw.githubusercontent.com/chxry/o/master/res/brick.jpg">texture</a>.</p>
+<p>Now we can add a <code>Material</code> to our <code>Mesh</code>.</p>
+<pre><code class="language-rs">use phosphor_3d::{Camera, Transform, Material, scenerenderer};
+use phosphor::gfx::{Renderer, Mesh, Texture};
+
+...
+world
+  .spawn(&quot;teapot&quot;)
+  .insert(Transform::new())
+  .insert(Mesh::load(renderer, &quot;teapot.obj&quot;)?)
+  .insert(Material::Textured(Texture::load(
+    renderer,
+    &quot;brick.jpg&quot;,
+  )?));
+...
+</code></pre>
+<p>Our teapot should now have a brick texture in game.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="phosphor_ui-guide"><a class="header" href="#phosphor_ui-guide">phosphor_ui Guide</a></h1>
+<p>The <code>phosphor_ui</code> crate allows us to debug our game using <a href="https://github.com/ocornut/imgui">imgui</a>. To use it first enable the <code>uirenderer</code> system.</p>
+<pre><code class="language-rs">use phosphor_ui::uirenderer;
+
+fn main() -&gt; Result&lt;()&gt; {
+  ...
+  Engine::new()
+    .add_system(Stage::Start, &amp;uirenderer)
+    .run()
+}
+</code></pre>
+<p>Now during the draw stage, we have access to the <code>Ui</code> resource, so lets try draw some text.</p>
+<pre><code class="language-rs">use phosphor_ui::{uirenderer, imgui::Ui};
+
+fn main() -&gt; Result&lt;()&gt; {
+  ...
+  Engine::new()
+    .add_system(Stage::Start, &amp;uirenderer)
+    .add_system(Stage::Draw, &amp;draw_ui)
+    .run()
+}
+
+fn draw_ui(world: &amp;mut World) -&gt; Result&lt;()&gt; {
+  let ui = world.get_resource::&lt;Ui&gt;().unwrap();
+  ui.text(&quot;Hello ui!&quot;);
+  Ok(())
+}
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+            </nav>
+
+        </div>
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        <script type="text/javascript">
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+    </body>
+</html>
